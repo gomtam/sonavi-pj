@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>홈캠 - 스마트 홈 카메라</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <header class="row py-3 bg-dark text-white">
+            <div class="col">
+                <h1 class="text-center">홈캠 <small class="text-muted">스마트 홈 카메라</small></h1>
+            </div>
+        </header>
+
+        <main class="row mt-3">
+            <!-- 카메라 화면 -->
+            <div class="col-lg-8">
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title">카메라 화면</h3>
+                    </div>
+                    <div class="card-body p-0 text-center">
+                        <div class="position-relative">
+                            <img src="{{ url_for('video_feed') }}" alt="카메라 화면" class="img-fluid" id="camera-feed">
+                            <div class="camera-controls">
+                                <button class="btn btn-secondary ctrl-btn" id="up-btn" title="위로">
+                                    <i class="fas fa-arrow-up"></i>
+                                </button>
+                                <button class="btn btn-secondary ctrl-btn" id="down-btn" title="아래로">
+                                    <i class="fas fa-arrow-down"></i>
+                                </button>
+                                <button class="btn btn-secondary ctrl-btn" id="left-btn" title="왼쪽으로">
+                                    <i class="fas fa-arrow-left"></i>
+                                </button>
+                                <button class="btn btn-secondary ctrl-btn" id="right-btn" title="오른쪽으로">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-center">
+                        <button id="capture-btn" class="btn btn-danger">
+                            <i class="fas fa-camera"></i> 사진 촬영
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 컨트롤 패널 -->
+            <div class="col-lg-4">
+                <!-- 알림 패널 -->
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h3 class="card-title">알림</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="notification-area" class="notification-area">
+                            <p>시스템이 준비되었습니다.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 채팅 패널 -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h3 class="card-title">AI 도우미</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="chat-messages" class="chat-area mb-3">
+                            <div class="message assistant">
+                                <p>안녕하세요! 무엇을 도와드릴까요?</p>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="chat-input" placeholder="메시지 입력...">
+                            <button class="btn btn-primary" id="send-btn">
+                                <i class="fas fa-paper-plane"></i> 전송
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 촬영한 사진 -->
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h3 class="card-title">최근 촬영</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="capture-gallery" class="row g-2">
+                            <!-- 촬영된 사진이 여기에 표시됩니다 -->
+                            <p class="text-center text-muted">촬영한 사진이 없습니다</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 음성 학습 모달 -->
+        <div class="modal fade" id="voiceTrainingModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">음성 학습</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>음성 샘플을 녹음하여 AI 도우미의 목소리를 학습시킬 수 있습니다.</p>
+                        <div class="d-grid gap-2">
+                            <button id="record-btn" class="btn btn-primary">
+                                <i class="fas fa-microphone"></i> 녹음 시작
+                            </button>
+                            <div id="recording-status" class="alert alert-info d-none">
+                                녹음 중... <span id="recording-time">0</span>초
+                            </div>
+                        </div>
+                        <div id="recordings-list" class="mt-3">
+                            <!-- 녹음된 오디오 샘플이 여기에 표시됩니다 -->
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                        <button type="button" class="btn btn-primary" id="train-voice-btn" disabled>학습 시작</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="mt-5 py-3 bg-dark text-white text-center">
+        <div class="container">
+            <p>홈캠 - 스마트 홈 카메라 시스템</p>
+            <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#voiceTrainingModal">
+                <i class="fas fa-microphone"></i> 음성 학습
+            </button>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 
