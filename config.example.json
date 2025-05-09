@@ -1,0 +1,19 @@
+{
+    "notification_cooldown": 30,
+    "confidence_threshold": 0.7,
+    "special_objects": [
+        "cat", "dog", "person", "bird", "car"
+    ],
+    "tts_settings": {
+        "rate": 150,
+        "volume": 1.0
+    },
+    "streaming_settings": {
+        "host": "0.0.0.0",
+        "port": 5000
+    },
+    "auth_settings": {
+        "username": "your_username_here",
+        "password": "your_password_here"
+    }
+}

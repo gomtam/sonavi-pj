@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프로그램 종료</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --background-color: #1a1a1a;
+            --card-color: #2d2d2d;
+            --text-color: #ecf0f1;
+            --text-secondary: #bdc3c7;
+            --border-radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        
+        .container {
+            text-align: center;
+            padding: 40px;
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            max-width: 450px;
+            width: 90%;
+        }
+        
+        .icon-container {
+            font-size: 60px;
+            margin-bottom: 20px;
+            color: var(--danger-color);
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .button {
+            padding: 12px 24px;
+            color: var(--text-color);
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+            background-color: rgba(39, 174, 96, 0.2);
+            border: 1px solid rgba(39, 174, 96, 0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .button:hover {
+            background-color: rgba(39, 174, 96, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .button i {
+            margin-right: 8px;
+        }
+        
+        .status {
+            margin-top: 25px;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            display: none;
+            font-size: 14px;
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .connecting {
+            color: var(--warning-color);
+        }
+        
+        .connected {
+            color: var(--accent-color);
+        }
+        
+        .error {
+            color: var(--danger-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon-container">
+            <i class="fas fa-video-slash"></i>
+        </div>
+        <h1>카메라가 정지되었습니다</h1>
+        <p>카메라 시스템이 정지된 상태입니다. 다시 시작하여 모니터링을 계속하시겠습니까?</p>
+        <button id="restart-btn" class="button">
+            <i class="fas fa-redo"></i> 카메라 다시 시작
+        </button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        document.getElementById('restart-btn').addEventListener('click', function() {
+            const status = document.getElementById('status');
+            status.style.display = 'block';
+            status.textContent = '카메라 재시작 중...';
+            status.className = 'status connecting';
+            
+            fetch('/restart', { method: 'POST' })
+                .then(response => response.text())
+                .then(data => {
+                    status.textContent = data;
+                    status.className = 'status connected';
+                    // 성공하면 메인 페이지로 이동
+                    if (data.includes('시작되었습니다')) {
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 1000);
+                    }
+                })
+                .catch(error => {
+                    status.textContent = '재시작 오류: ' + error;
+                    status.className = 'status error';
+                });
+        });
+    </script>
+</body>
+</html> 

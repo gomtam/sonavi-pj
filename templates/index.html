@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트홈 CCTV 시스템</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --background-color: #1a1a1a;
+            --card-color: #2d2d2d;
+            --text-color: #ecf0f1;
+            --text-secondary: #bdc3c7;
+            --border-radius: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 0;
+            margin: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo i {
+            font-size: 24px;
+            color: var(--secondary-color);
+            margin-right: 10px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 500;
+        }
+
+        .camera-section {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .camera-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .main-camera {
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            position: relative;
+        }
+
+        .camera-feed {
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+            border-radius: var(--border-radius);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        #video-feed {
+            width: 100%;
+            display: block;
+            object-fit: cover;
+            border-radius: var(--border-radius);
+            background-color: #000;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .record-indicator {
+            width: 12px;
+            height: 12px;
+            background-color: var(--danger-color);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        .camera-time {
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+        }
+
+        .camera-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .control-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .control-btn {
+            background-color: rgba(52, 152, 219, 0.2);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            color: var(--text-color);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background-color: rgba(52, 152, 219, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .control-btn i {
+            font-size: 18px;
+        }
+
+        .center-btn {
+            background-color: rgba(39, 174, 96, 0.2);
+            border: 1px solid rgba(39, 174, 96, 0.3);
+        }
+
+        .center-btn:hover {
+            background-color: rgba(39, 174, 96, 0.4);
+        }
+
+        .camera-options {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .option-btn {
+            background-color: var(--card-color);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            border-radius: var(--border-radius);
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .option-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .option-btn i {
+            margin-right: 8px;
+        }
+
+        .danger {
+            background-color: rgba(231, 76, 60, 0.2);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+
+        .danger:hover {
+            background-color: rgba(231, 76, 60, 0.4);
+        }
+
+        .info-card {
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            padding: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: var(--accent-color);
+        }
+
+        .status-indicator i {
+            margin-right: 5px;
+        }
+
+        .detection-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .detection-item {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .detection-icon {
+            margin-right: 10px;
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+            color: var(--secondary-color);
+        }
+
+        .detection-info {
+            flex-grow: 1;
+        }
+
+        .detection-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .confidence {
+            background-color: rgba(39, 174, 96, 0.2);
+            color: var(--accent-color);
+            border-radius: 20px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .system-status {
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        #status {
+            flex-grow: 1;
+            margin-left: 10px;
+        }
+
+        .connected {
+            color: var(--accent-color);
+        }
+        
+        .connecting {
+            color: var(--warning-color);
+        }
+        
+        .disconnected {
+            color: var(--danger-color);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 5px;
+            }
+            
+            .header {
+                padding: 10px 0;
+            }
+            
+            h1 {
+                font-size: 20px;
+            }
+            
+            .main-camera {
+                padding: 10px;
+            }
+            
+            .camera-controls {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .camera-options {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        /* 스크롤바 스타일 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <i class="fas fa-video"></i>
+                <h1>스마트홈 CCTV</h1>
+            </div>
+            <div id="current-time"></div>
+        </div>
+        
+        <div class="camera-section">
+            <div class="main-camera">
+                <div class="camera-feed">
+                    <img id="video-feed" src="" alt="카메라 스트림">
+                    <div class="camera-overlay">
+                        <div class="record-indicator"></div>
+                        <div class="camera-time" id="camera-timestamp">실시간</div>
+                    </div>
+                </div>
+                
+                <div class="camera-controls">
+                    <div class="control-row">
+                        <div class="control-btn" id="zoom-in"><i class="fas fa-search-plus"></i></div>
+                        <div class="control-btn center-btn" id="zoom-out"><i class="fas fa-search-minus"></i></div>
+                        <div class="control-btn" id="pan-up"><i class="fas fa-arrow-up"></i></div>
+                    </div>
+                    <div class="control-row">
+                        <div class="control-btn" id="pan-left"><i class="fas fa-arrow-left"></i></div>
+                        <div class="control-btn center-btn" id="center-camera"><i class="fas fa-crosshairs"></i></div>
+                        <div class="control-btn" id="pan-right"><i class="fas fa-arrow-right"></i></div>
+                    </div>
+                    <div class="control-row">
+                        <div class="control-btn" id="pan-down"><i class="fas fa-arrow-down"></i></div>
+                        <div class="control-btn center-btn" id="brightness-down"><i class="fas fa-sun"></i> -</div>
+                        <div class="control-btn" id="brightness-up"><i class="fas fa-sun"></i> +</div>
+                    </div>
+                </div>
+                
+                <div class="camera-options">
+                    <div class="option-btn" id="snapshot-btn"><i class="fas fa-camera"></i> 스냅샷</div>
+                    <div class="option-btn" id="record-btn"><i class="fas fa-record-vinyl"></i> 녹화</div>
+                    <div class="option-btn" id="rotate-btn"><i class="fas fa-sync"></i> 회전</div>
+                    <div class="option-btn" id="settings-btn"><i class="fas fa-cog"></i> 설정</div>
+                    <div class="option-btn" id="restart-btn"><i class="fas fa-redo"></i> 재시작</div>
+                    <div class="option-btn danger" id="shutdown-btn"><i class="fas fa-power-off"></i> 종료</div>
+                </div>
+            </div>
+            
+            <div class="side-panel">
+                <div class="info-card">
+                    <div class="card-header">
+                        <span class="card-title"><i class="fas fa-eye"></i> 감지된 객체</span>
+                        <div class="status-indicator">
+                            <i class="fas fa-circle"></i>
+                            <span>실시간</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detection-list" id="detection-list">
+                        <div class="detection-item">
+                            <div class="detection-info">
+                                <div>감지 중...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="system-status">
+                    <i class="fas fa-plug"></i>
+                    <div id="status" class="connecting">연결 중...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 현재 시간 업데이트
+            function updateTime() {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('ko-KR');
+                const dateString = now.toLocaleDateString('ko-KR');
+                document.getElementById('current-time').textContent = `${dateString} ${timeString}`;
+                document.getElementById('camera-timestamp').textContent = timeString;
+            }
+            
+            setInterval(updateTime, 1000);
+            updateTime();
+            
+            // 소켓 연결 설정
+            const socket = io({
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 10
+            });
+            
+            const videoFeed = document.getElementById('video-feed');
+            const detectionList = document.getElementById('detection-list');
+            const status = document.getElementById('status');
+            const restartBtn = document.getElementById('restart-btn');
+            const shutdownBtn = document.getElementById('shutdown-btn');
+            
+            // 페이지 로드 시 연결 중 표시
+            status.textContent = '연결 중...';
+            status.className = 'connecting';
+            
+            // 소켓 연결
+            socket.on('connect', () => {
+                console.log('서버에 연결됨');
+                status.textContent = '연결됨';
+                status.className = 'connected';
+            });
+            
+            // 소켓 연결 끊김
+            socket.on('disconnect', () => {
+                console.log('서버와 연결 끊김');
+                status.textContent = '연결 끊김 - 재연결 중...';
+                status.className = 'disconnected';
+            });
+            
+            // 에러 처리
+            socket.on('error', (error) => {
+                console.error('Socket 오류:', error);
+                status.textContent = '연결 오류: ' + error;
+                status.className = 'disconnected';
+            });
+            
+            // 재연결 시도
+            socket.on('reconnecting', (attemptNumber) => {
+                console.log(`재연결 시도 ${attemptNumber}회`);
+                status.textContent = `재연결 시도 중 (${attemptNumber}회)`;
+                status.className = 'connecting';
+            });
+            
+            // 재연결 성공
+            socket.on('reconnect', () => {
+                console.log('재연결 성공');
+                status.textContent = '재연결 성공';
+                status.className = 'connected';
+            });
+            
+            // 카메라 프레임 수신
+            socket.on('frame', (data) => {
+                try {
+                    // 이미지 로딩 확인
+                    if (data.image) {
+                        videoFeed.src = 'data:image/jpeg;base64,' + data.image;
+                        
+                        // 이미지 로딩 오류 시 처리
+                        videoFeed.onerror = function() {
+                            console.error('이미지 로딩 오류');
+                            videoFeed.src = ''; // 이미지 초기화
+                        };
+                    }
+                    
+                    // 감지 정보 업데이트
+                    if (data.detections && Array.isArray(data.detections)) {
+                        if (data.detections.length > 0) {
+                            let html = '';
+                            data.detections.forEach(detection => {
+                                if (detection && detection.label) {
+                                    const now = new Date();
+                                    const timeString = now.toLocaleTimeString('ko-KR');
+                                    
+                                    // 객체 유형에 따라 아이콘 선택
+                                    let icon = 'fa-object-group';
+                                    if (detection.label === 'person') icon = 'fa-user';
+                                    else if (detection.label === 'car') icon = 'fa-car';
+                                    else if (detection.label === 'dog') icon = 'fa-dog';
+                                    else if (detection.label === 'cat') icon = 'fa-cat';
+                                    else if (detection.label === 'bird') icon = 'fa-dove';
+                                    
+                                    html += `
+                                        <div class="detection-item">
+                                            <div class="detection-icon">
+                                                <i class="fas ${icon}"></i>
+                                            </div>
+                                            <div class="detection-info">
+                                                <div>${detection.label}</div>
+                                                <div class="detection-time">${timeString}</div>
+                                            </div>
+                                            <div class="confidence">${(detection.confidence * 100).toFixed(1)}%</div>
+                                        </div>
+                                    `;
+                                }
+                            });
+                            detectionList.innerHTML = html || '<div class="detection-item">감지된 객체가 없습니다.</div>';
+                        } else {
+                            detectionList.innerHTML = '<div class="detection-item">감지된 객체가 없습니다.</div>';
+                        }
+                    }
+                } catch (e) {
+                    console.error('프레임 처리 중 오류:', e);
+                }
+            });
+            
+            // 카메라 오류
+            socket.on('camera_error', (errorMsg) => {
+                console.error('카메라 오류:', errorMsg);
+                status.textContent = '오류: ' + errorMsg;
+                status.className = 'disconnected';
+            });
+            
+            // 재시작 버튼
+            restartBtn.addEventListener('click', () => {
+                status.textContent = '카메라 재시작 중...';
+                status.className = 'connecting';
+                
+                fetch('/restart', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(data => {
+                        status.textContent = data;
+                        status.className = 'connected';
+                    })
+                    .catch(error => {
+                        console.error('재시작 오류:', error);
+                        status.textContent = '재시작 요청 오류: ' + error;
+                        status.className = 'disconnected';
+                    });
+            });
+            
+            // 종료 버튼
+            shutdownBtn.addEventListener('click', () => {
+                if (confirm('정말 프로그램을 종료하시겠습니까?')) {
+                    status.textContent = '프로그램 종료 중...';
+                    status.className = 'disconnected';
+                    
+                    fetch('/shutdown', { method: 'POST' })
+                        .then(response => {
+                            if (response.ok) {
+                                window.location.href = '/goodbye';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('종료 오류:', error);
+                            status.textContent = '종료 요청 오류: ' + error;
+                        });
+                }
+            });
+            
+            // 카메라 제어 버튼들 - 향후 기능 구현을 위한 이벤트 리스너
+            const controlButtons = [
+                'pan-up', 'pan-down', 'pan-left', 'pan-right', 'center-camera',
+                'zoom-in', 'zoom-out', 'brightness-up', 'brightness-down',
+                'snapshot-btn', 'record-btn', 'rotate-btn', 'settings-btn'
+            ];
+            
+            controlButtons.forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        console.log(`${id} 버튼 클릭됨`);
+                        // 향후 기능 구현을 위한 자리 표시자
+                        alert(`${id} 기능은 아직 구현되지 않았습니다.`);
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

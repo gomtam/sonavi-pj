@@ -1,0 +1,8 @@
+# 백업 폴더 무시
+backups/
+
+# 특정 폴더 내 모든 .pt 파일 무시
+object_detection_yolov5/*.pt
+
+# 실제 설정 파일 무시
+config.json
