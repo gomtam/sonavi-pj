@@ -6,3 +6,7 @@ object_detection_yolov5/*.pt
 
 # 실제 설정 파일 무시
 config.json
+
+# 스냅샷 및 녹화 파일 무시
+snapshots/
+recordings/

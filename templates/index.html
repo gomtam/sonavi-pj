@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>스마트홈 CCTV 시스템</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -36,18 +36,19 @@
 
         .container {
             width: 100%;
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
-            padding: 10px;
+            padding: 1vw;
+            box-sizing: border-box;
         }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 0;
+            padding: 10px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .logo {
@@ -62,26 +63,66 @@
         }
 
         h1 {
-            font-size: 24px;
+            font-size: 3vmin;
             font-weight: 500;
         }
 
         .camera-section {
             display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 20px;
+            grid-template-columns: 1fr 280px;
+            gap: 10px;
         }
 
         @media (max-width: 900px) {
             .camera-section {
                 grid-template-columns: 1fr;
             }
+            
+            .camera-controls {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 2%;
+            }
+            
+            .control-btn {
+                padding: 2vh;
+                font-size: 2.5vmin;
+            }
+            
+            .detection-item {
+                padding: 2vh;
+                font-size: 2.5vmin;
+            }
+            
+            .option-btn {
+                padding: 2vh;
+                font-size: 2.5vmin;
+            }
+        }
+        
+        /* 모바일 장치 최적화 */
+        @media (max-width: 480px) {
+            .container {
+                padding: 2%;
+            }
+            
+            .camera-controls {
+                margin-top: 3vh;
+            }
+            
+            .detection-item {
+                padding: 1.5vh;
+                font-size: 3vmin;
+            }
+            
+            .control-btn i, .option-btn i {
+                font-size: 4vmin;
+            }
         }
 
         .main-camera {
             background-color: var(--card-color);
             border-radius: var(--border-radius);
-            padding: 20px;
+            padding: 10px;
             position: relative;
         }
 
@@ -99,6 +140,7 @@
             object-fit: cover;
             border-radius: var(--border-radius);
             background-color: #000;
+            aspect-ratio: 4/3; /* 화면 비율 고정 */
         }
 
         .camera-overlay {
@@ -134,15 +176,15 @@
         .camera-controls {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 20px;
+            gap: 5px;
+            margin-top: 10px;
         }
 
         .control-row {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 5px;
+            margin-bottom: 5px;
         }
 
         .control-btn {
@@ -150,7 +192,7 @@
             border: 1px solid rgba(52, 152, 219, 0.3);
             color: var(--text-color);
             border-radius: var(--border-radius);
-            padding: 12px;
+            padding: 8px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -179,8 +221,8 @@
         .camera-options {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 20px;
+            gap: 5px;
+            margin-top: 10px;
         }
 
         .option-btn {
@@ -188,12 +230,13 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             color: var(--text-color);
             border-radius: var(--border-radius);
-            padding: 12px;
+            padding: 8px;
             display: flex;
             justify-content: center;
             align-items: center;
             cursor: pointer;
             transition: all 0.2s ease;
+            font-size: 0.85em;
         }
 
         .option-btn:hover {
@@ -216,20 +259,20 @@
         .info-card {
             background-color: var(--card-color);
             border-radius: var(--border-radius);
-            padding: 20px;
+            padding: 10px;
         }
 
         .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .card-title {
-            font-size: 18px;
+            font-size: 2.5vmin;
             font-weight: 500;
         }
 
@@ -245,15 +288,15 @@
         }
 
         .detection-list {
-            max-height: 300px;
+            max-height: 200px;
             overflow-y: auto;
         }
 
         .detection-item {
             background-color: rgba(255, 255, 255, 0.05);
             border-radius: var(--border-radius);
-            padding: 12px 15px;
-            margin-bottom: 10px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -288,8 +331,8 @@
         .system-status {
             background-color: var(--card-color);
             border-radius: var(--border-radius);
-            padding: 15px;
-            margin-top: 20px;
+            padding: 8px;
+            margin-top: 10px;
             display: flex;
             align-items: center;
         }
@@ -355,6 +398,174 @@
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.3);
         }
+
+        /* 종료 버튼 스타일 */
+        .shutdown-area {
+            margin-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 15px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .shutdown-btn {
+            background-color: rgba(231, 76, 60, 0.3);
+            border: 2px solid rgba(231, 76, 60, 0.5);
+            color: var(--text-color);
+            border-radius: var(--border-radius);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            width: 70%;
+            max-width: 200px;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+        
+        .shutdown-btn i {
+            margin-right: 8px;
+            font-size: 1.2em;
+        }
+        
+        .shutdown-btn:hover {
+            background-color: rgba(231, 76, 60, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* 종료 확인 모달 스타일 */
+        .shutdown-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .shutdown-modal-content {
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .shutdown-modal-header {
+            background-color: rgba(231, 76, 60, 0.3);
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(231, 76, 60, 0.5);
+        }
+        
+        .shutdown-modal-header i {
+            color: var(--danger-color);
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        
+        .shutdown-modal-header h3 {
+            margin: 0;
+            color: var(--text-color);
+        }
+        
+        .shutdown-modal-body {
+            padding: 20px;
+        }
+        
+        .shutdown-modal-body p {
+            margin: 0 0 15px 0;
+            color: var(--text-color);
+        }
+        
+        .confirm-checkbox {
+            display: flex;
+            align-items: center;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .confirm-checkbox input {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .shutdown-modal-footer {
+            padding: 15px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .shutdown-modal-footer button {
+            padding: 8px 20px;
+            border-radius: var(--border-radius);
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+        
+        .shutdown-modal-footer button:first-child {
+            background-color: transparent;
+            color: var(--text-color);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .shutdown-modal-footer button:first-child:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .shutdown-modal-footer button:last-child {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        .shutdown-modal-footer button:last-child:hover {
+            background-color: #c0392b;
+        }
+        
+        .shutdown-modal-footer button:last-child:disabled {
+            background-color: #7f8c8d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        /* 녹화 버튼 활성화 스타일 */
+        .recording {
+            background-color: rgba(231, 76, 60, 0.4) !important;
+            border: 1px solid rgba(231, 76, 60, 0.6) !important;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.6); }
+            70% { box-shadow: 0 0 0 6px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
     </style>
 </head>
 <body>
@@ -401,7 +612,11 @@
                     <div class="option-btn" id="rotate-btn"><i class="fas fa-sync"></i> 회전</div>
                     <div class="option-btn" id="settings-btn"><i class="fas fa-cog"></i> 설정</div>
                     <div class="option-btn" id="restart-btn"><i class="fas fa-redo"></i> 재시작</div>
-                    <div class="option-btn danger" id="shutdown-btn"><i class="fas fa-power-off"></i> 종료</div>
+                </div>
+                
+                <!-- 종료 버튼 별도 분리 -->
+                <div class="shutdown-area">
+                    <div class="shutdown-btn" id="shutdown-btn"><i class="fas fa-power-off"></i> 시스템 종료</div>
                 </div>
             </div>
             
@@ -581,7 +796,46 @@
             
             // 종료 버튼
             shutdownBtn.addEventListener('click', () => {
-                if (confirm('정말 프로그램을 종료하시겠습니까?')) {
+                // 사용자 정의 확인 모달 생성
+                const shutdownModal = document.createElement('div');
+                shutdownModal.className = 'shutdown-modal';
+                shutdownModal.innerHTML = `
+                    <div class="shutdown-modal-content">
+                        <div class="shutdown-modal-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>시스템 종료 확인</h3>
+                        </div>
+                        <div class="shutdown-modal-body">
+                            <p>정말 시스템을 종료하시겠습니까?</p>
+                            <p>모든 모니터링이 중지됩니다.</p>
+                            <div class="confirm-checkbox">
+                                <input type="checkbox" id="confirm-shutdown"> 
+                                <label for="confirm-shutdown">예, 종료할 것을 확인합니다</label>
+                            </div>
+                        </div>
+                        <div class="shutdown-modal-footer">
+                            <button id="cancel-shutdown">취소</button>
+                            <button id="confirm-shutdown-btn" disabled>종료</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(shutdownModal);
+                
+                // 체크박스와 버튼 이벤트 추가
+                const checkbox = document.getElementById('confirm-shutdown');
+                const confirmBtn = document.getElementById('confirm-shutdown-btn');
+                const cancelBtn = document.getElementById('cancel-shutdown');
+                
+                checkbox.addEventListener('change', (e) => {
+                    confirmBtn.disabled = !e.target.checked;
+                });
+                
+                cancelBtn.addEventListener('click', () => {
+                    document.body.removeChild(shutdownModal);
+                });
+                
+                confirmBtn.addEventListener('click', () => {
                     status.textContent = '프로그램 종료 중...';
                     status.className = 'disconnected';
                     
@@ -595,14 +849,14 @@
                             console.error('종료 오류:', error);
                             status.textContent = '종료 요청 오류: ' + error;
                         });
-                }
+                });
             });
             
             // 카메라 제어 버튼들 - 향후 기능 구현을 위한 이벤트 리스너
             const controlButtons = [
                 'pan-up', 'pan-down', 'pan-left', 'pan-right', 'center-camera',
                 'zoom-in', 'zoom-out', 'brightness-up', 'brightness-down',
-                'snapshot-btn', 'record-btn', 'rotate-btn', 'settings-btn'
+                'rotate-btn', 'settings-btn'
             ];
             
             controlButtons.forEach(id => {
@@ -613,6 +867,131 @@
                         // 향후 기능 구현을 위한 자리 표시자
                         alert(`${id} 기능은 아직 구현되지 않았습니다.`);
                     });
+                }
+            });
+            
+            // 스냅샷 버튼 기능
+            const snapshotBtn = document.getElementById('snapshot-btn');
+            snapshotBtn.addEventListener('click', () => {
+                // 현재 비디오 프레임 가져오기
+                const currentFrame = videoFeed.src;
+                if (!currentFrame || currentFrame === '') {
+                    alert('카메라 화면을 가져올 수 없습니다.');
+                    return;
+                }
+                
+                // 로딩 표시
+                snapshotBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...';
+                snapshotBtn.disabled = true;
+                
+                // 서버에 저장 요청
+                fetch('/snapshot', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: currentFrame.split(',')[1] }) // base64 데이터만 전송
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 성공 메시지 표시
+                        snapshotBtn.innerHTML = '<i class="fas fa-check"></i> 저장 완료';
+                        setTimeout(() => {
+                            snapshotBtn.innerHTML = '<i class="fas fa-camera"></i> 스냅샷';
+                            snapshotBtn.disabled = false;
+                        }, 2000);
+                        
+                        // 저장된 파일 경로 알림
+                        alert(`스냅샷이 저장되었습니다: ${data.filename}`);
+                    } else {
+                        alert('스냅샷 저장 실패: ' + data.error);
+                        snapshotBtn.innerHTML = '<i class="fas fa-camera"></i> 스냅샷';
+                        snapshotBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('스냅샷 저장 오류:', error);
+                    alert('스냅샷 저장 중 오류가 발생했습니다.');
+                    snapshotBtn.innerHTML = '<i class="fas fa-camera"></i> 스냅샷';
+                    snapshotBtn.disabled = false;
+                });
+            });
+            
+            // 녹화 버튼 기능
+            const recordBtn = document.getElementById('record-btn');
+            let isRecording = false;
+            let recordingStartTime = null;
+            
+            recordBtn.addEventListener('click', () => {
+                if (!isRecording) {
+                    // 녹화 시작
+                    isRecording = true;
+                    recordingStartTime = new Date();
+                    
+                    // 버튼 상태 변경
+                    recordBtn.innerHTML = '<i class="fas fa-stop-circle"></i> 녹화중...';
+                    recordBtn.classList.add('recording');
+                    
+                    // 서버에 녹화 시작 요청
+                    fetch('/record/start', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (!data.success) {
+                                alert('녹화 시작 실패: ' + data.error);
+                                isRecording = false;
+                                recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
+                                recordBtn.classList.remove('recording');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('녹화 시작 오류:', error);
+                            alert('녹화 시작 중 오류가 발생했습니다.');
+                            isRecording = false;
+                            recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
+                            recordBtn.classList.remove('recording');
+                        });
+                    
+                } else {
+                    // 녹화 중지
+                    isRecording = false;
+                    
+                    // 버튼 상태 변경
+                    recordBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...';
+                    recordBtn.disabled = true;
+                    
+                    // 녹화 종료 시간 계산
+                    const recordingEndTime = new Date();
+                    const recordingDuration = Math.round((recordingEndTime - recordingStartTime) / 1000); // 초 단위
+                    
+                    // 서버에 녹화 중지 요청
+                    fetch('/record/stop', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                recordBtn.innerHTML = '<i class="fas fa-check"></i> 저장 완료';
+                                setTimeout(() => {
+                                    recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
+                                    recordBtn.classList.remove('recording');
+                                    recordBtn.disabled = false;
+                                }, 2000);
+                                
+                                // 저장된 파일 경로 알림
+                                alert(`녹화가 저장되었습니다: ${data.filename}\n녹화 시간: ${recordingDuration}초`);
+                            } else {
+                                alert('녹화 저장 실패: ' + data.error);
+                                recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
+                                recordBtn.classList.remove('recording');
+                                recordBtn.disabled = false;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('녹화 저장 오류:', error);
+                            alert('녹화 저장 중 오류가 발생했습니다.');
+                            recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
+                            recordBtn.classList.remove('recording');
+                            recordBtn.disabled = false;
+                        });
                 }
             });
         });

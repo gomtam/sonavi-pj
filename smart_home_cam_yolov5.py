@@ -10,7 +10,7 @@ import pickle
 import pyttsx3
 import json
 from datetime import datetime
-from flask import Flask, render_template, Response, request, redirect, url_for
+from flask import Flask, render_template, Response, request, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
 from functools import wraps
 import base64
@@ -23,6 +23,14 @@ import subprocess
 import gc
 import torch
 from ultralytics import YOLO
+
+# 스냅샷과 녹화를 위한 디렉토리 설정
+SNAPSHOTS_DIR = "snapshots"
+RECORDINGS_DIR = "recordings"
+
+# 디렉토리가 없으면 생성
+os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
+os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret_key_for_smart_home_cam'
@@ -118,6 +126,13 @@ class SmartHomeCam:
         # 웹 스트리밍을 위한 변수
         self.frame = None
         self.detections = []
+        
+        # 녹화 관련 변수
+        self.is_recording = False
+        self.video_writer = None
+        self.recording_start_time = None
+        self.recording_thread = None
+        self.recording_frames = queue.Queue(maxsize=300)  # 최대 300프레임 버퍼 (약 10초)
         
         # 설정 파일 로드
         self.load_config()
@@ -455,6 +470,20 @@ class SmartHomeCam:
                 # 프레임 저장 (화면 표시용 프레임 사용)
                 self.frame = display_frame
                 
+                # 녹화 중이면 프레임 추가
+                if self.is_recording:
+                    try:
+                        # 큐가 가득 차면 오래된 프레임 제거
+                        if self.recording_frames.full():
+                            try:
+                                self.recording_frames.get_nowait()
+                            except queue.Empty:
+                                pass
+                        # 새 프레임 추가
+                        self.recording_frames.put(frame.copy())
+                    except Exception as e:
+                        print(f"녹화 프레임 추가 중 오류: {e}")
+                
                 try:
                     # 웹소켓을 통해 프레임 전송
                     # 프레임 크기 줄이기 (해상도 감소)
@@ -508,6 +537,157 @@ class SmartHomeCam:
                     except Exception as init_error:
                         print(f"카메라 재초기화 실패: {init_error}")
                         time.sleep(5)  # 잠시 대기 후 다시 시도
+
+    def save_snapshot(self, image_data):
+        """Base64 이미지 데이터를 받아 스냅샷으로 저장합니다."""
+        try:
+            # 현재 시간을 기반으로 파일명 생성
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{SNAPSHOTS_DIR}/snapshot_{timestamp}.jpg"
+            
+            # Base64 이미지 데이터를 디코딩하여 이미지로 변환
+            image_bytes = base64.b64decode(image_data)
+            
+            # numpy 배열로 변환하여 OpenCV 이미지로 처리
+            nparr = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if img is None:
+                return False, "이미지 디코딩 실패"
+            
+            # 이미지 저장
+            cv2.imwrite(filename, img)
+            
+            print(f"스냅샷 저장 완료: {filename}")
+            return True, filename
+            
+        except Exception as e:
+            print(f"스냅샷 저장 중 오류 발생: {e}")
+            return False, str(e)
+            
+    def start_recording(self):
+        """비디오 녹화를 시작합니다."""
+        if self.is_recording:
+            return False, "이미 녹화 중입니다."
+            
+        try:
+            # 현재 시간 기록
+            self.recording_start_time = datetime.now()
+            timestamp = self.recording_start_time.strftime("%Y%m%d_%H%M%S")
+            filename = f"{RECORDINGS_DIR}/recording_{timestamp}.mp4"
+            
+            # 비디오 작성기 초기화 (대기)
+            self.is_recording = True
+            
+            # 별도 스레드에서 녹화 작업 시작
+            self.recording_thread = threading.Thread(target=self._recording_worker, args=(filename,))
+            self.recording_thread.daemon = True
+            self.recording_thread.start()
+            
+            print(f"녹화 시작: {filename}")
+            return True, filename
+            
+        except Exception as e:
+            self.is_recording = False
+            print(f"녹화 시작 중 오류 발생: {e}")
+            return False, str(e)
+            
+    def stop_recording(self):
+        """비디오 녹화를 중지합니다."""
+        if not self.is_recording:
+            return False, "녹화 중이 아닙니다."
+            
+        try:
+            # 녹화 중지 플래그 설정
+            self.is_recording = False
+            
+            # 녹화 스레드가 종료될 때까지 대기
+            if self.recording_thread and self.recording_thread.is_alive():
+                self.recording_thread.join(timeout=10)  # 최대 10초 대기
+                
+            print("녹화 중지 완료")
+            
+            # 저장된 파일명 생성
+            timestamp = self.recording_start_time.strftime("%Y%m%d_%H%M%S")
+            filename = f"{RECORDINGS_DIR}/recording_{timestamp}.mp4"
+            
+            return True, filename
+            
+        except Exception as e:
+            print(f"녹화 중지 중 오류 발생: {e}")
+            return False, str(e)
+            
+    def _recording_worker(self, filename):
+        """별도 스레드에서 실행되어 녹화를 처리합니다."""
+        print(f"녹화 작업자 스레드 시작: {filename}")
+        
+        video_writer = None
+        frame_size = None
+        
+        try:
+            # 첫 번째 프레임을 기다립니다 (최대 5초)
+            first_frame = None
+            wait_start = time.time()
+            
+            while time.time() - wait_start < 5:
+                if not self.recording_frames.empty():
+                    first_frame = self.recording_frames.get()
+                    break
+                time.sleep(0.1)
+                
+            if first_frame is None:
+                print("녹화를 위한 프레임을 가져올 수 없습니다.")
+                self.is_recording = False
+                return
+                
+            # 프레임 크기 가져오기
+            frame_size = (first_frame.shape[1], first_frame.shape[0])
+            
+            # 비디오 작성기 초기화
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # MP4 코덱
+            video_writer = cv2.VideoWriter(filename, fourcc, 30.0, frame_size)
+            
+            # 첫 번째 프레임 쓰기
+            video_writer.write(first_frame)
+            
+            # 녹화 루프
+            while self.is_recording:
+                try:
+                    # 큐에서 프레임 가져오기 (최대 0.1초 대기)
+                    frame = self.recording_frames.get(timeout=0.1)
+                    
+                    # 프레임 저장
+                    if frame is not None and frame.size > 0:
+                        video_writer.write(frame)
+                except queue.Empty:
+                    # 큐가 비어있으면 계속 진행
+                    pass
+                except Exception as e:
+                    print(f"프레임 쓰기 중 오류: {e}")
+                    
+            # 남은 프레임 모두 처리
+            while not self.recording_frames.empty():
+                try:
+                    frame = self.recording_frames.get_nowait()
+                    if frame is not None and frame.size > 0:
+                        video_writer.write(frame)
+                except Exception:
+                    pass
+                    
+        except Exception as e:
+            print(f"녹화 작업자 오류: {e}")
+        finally:
+            # 비디오 작성기 정리
+            if video_writer:
+                video_writer.release()
+                print(f"녹화 파일 저장 완료: {filename}")
+                
+            # 녹화 큐 비우기
+            while not self.recording_frames.empty():
+                try:
+                    self.recording_frames.get_nowait()
+                except:
+                    pass
 
     def start(self):
         """카메라 시스템을 시작합니다."""
@@ -598,6 +778,62 @@ def shutdown():
 def goodbye():
     """종료 페이지를 표시합니다."""
     return render_template('goodbye.html')
+
+# 스냅샷 및 녹화 API 경로 추가
+@app.route('/snapshot', methods=['POST'])
+@requires_auth
+def snapshot():
+    """현재 카메라 화면을 스냅샷으로 저장합니다."""
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({'success': False, 'error': '이미지 데이터가 없습니다.'}), 400
+        
+        # Base64 이미지 데이터를 저장
+        success, result = home_cam.save_snapshot(data['image'])
+        
+        if success:
+            # 성공적으로 저장됨
+            return jsonify({'success': True, 'filename': result})
+        else:
+            # 오류 발생
+            return jsonify({'success': False, 'error': result}), 500
+    
+    except Exception as e:
+        print(f"스냅샷 저장 처리 중 오류: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/record/start', methods=['POST'])
+@requires_auth
+def start_recording():
+    """비디오 녹화를 시작합니다."""
+    try:
+        success, result = home_cam.start_recording()
+        
+        if success:
+            return jsonify({'success': True, 'filename': result})
+        else:
+            return jsonify({'success': False, 'error': result}), 400
+    
+    except Exception as e:
+        print(f"녹화 시작 처리 중 오류: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/record/stop', methods=['POST'])
+@requires_auth
+def stop_recording():
+    """비디오 녹화를 중지합니다."""
+    try:
+        success, result = home_cam.stop_recording()
+        
+        if success:
+            return jsonify({'success': True, 'filename': result})
+        else:
+            return jsonify({'success': False, 'error': result}), 400
+    
+    except Exception as e:
+        print(f"녹화 중지 처리 중 오류: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # 웹소켓 이벤트
 @socketio.on('connect')
