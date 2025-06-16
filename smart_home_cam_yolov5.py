@@ -7,7 +7,6 @@ import queue
 import socket
 import struct
 import pickle
-import pyttsx3
 import json
 from datetime import datetime
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify
@@ -109,13 +108,6 @@ class SmartHomeCam:
         self.classes = []
         self.colors = np.random.uniform(0, 255, size=(80, 3))
         self.detection_threshold = 0.7
-        
-        # TTS 설정
-        self.tts_engine = pyttsx3.init()
-        self.tts_engine.setProperty('rate', 150)
-        self.tts_engine.setProperty('volume', 1.0)
-        self.tts_thread = None
-        self.tts_lock = threading.Lock()
         
         # 객체 감지 결과 큐
         self.detection_queue = queue.Queue()
@@ -303,45 +295,9 @@ class SmartHomeCam:
                 if label not in self.last_notification_time or \
                    (current_time - self.last_notification_time[label]) > self.notification_cooldown:
                     
-                    message = f"{label}가 감지되었습니다."
-                    
-                    # TTS를 별도 스레드에서 실행하여 카메라가 멈추지 않도록 함
-                    if self.tts_thread is None or not self.tts_thread.is_alive():
-                        self.tts_thread = threading.Thread(target=self._speak_message, args=(message,))
-                        self.tts_thread.daemon = True
-                        self.tts_thread.start()
-                    
+                    # 감지 시간만 기록하고 메시지 출력하지 않음
                     self.last_notification_time[label] = current_time
-                    
-    def _speak_message(self, message):
-        """TTS 엔진을 사용하여 메시지를 말합니다. (별도 스레드에서 실행)"""
-        if not self.tts_engine:
-            print(f"음성 알림 (TTS 엔진 사용 불가): {message}")
-            return
-            
-        try:
-            with self.tts_lock:
-                # 혹시 모를 오류를 대비해 실행 시간 제한
-                start_time = time.time()
-                self.tts_engine.say(message)
-                self.tts_engine.runAndWait()
-                
-                # TTS 실행이 너무 오래 걸리면 로그 출력
-                duration = time.time() - start_time
-                if duration > 3:
-                    print(f"경고: TTS 실행이 {duration:.1f}초로 너무 오래 걸렸습니다.")
-        except Exception as e:
-            print(f"음성 출력 중 오류 발생: {e}")
-            
-            # TTS 엔진이 멈춘 경우 재초기화 시도
-            try:
-                print("TTS 엔진 재초기화 시도...")
-                self.tts_engine = pyttsx3.init()
-                self.tts_engine.setProperty('rate', 150)
-                self.tts_engine.setProperty('volume', 1.0)
-            except Exception as init_error:
-                print(f"TTS 엔진 재초기화 실패: {init_error}")
-                self.tts_engine = None
+
     
     def stop(self):
         """카메라와 프로그램을 정상적으로 종료합니다."""
