@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>스마트홈 CCTV 시스템</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+    
     <style>
         :root {
             --primary-color: #2c3e50;
@@ -380,6 +385,218 @@
             }
         }
         
+        /* 클라우드 스토리지 스타일 */
+        .cloud-section {
+            background-color: var(--card-color);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .cloud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .cloud-title {
+            display: flex;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .cloud-title i {
+            margin-right: 10px;
+            color: var(--secondary-color);
+        }
+
+        .storage-usage {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .usage-bar {
+            width: 100px;
+            height: 6px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin: 0 10px;
+            overflow: hidden;
+        }
+
+        .usage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-color) 0%, var(--warning-color) 80%, var(--danger-color) 100%);
+            transition: width 0.3s ease;
+        }
+
+        .cloud-tabs {
+            display: flex;
+            margin-bottom: 15px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            padding: 3px;
+        }
+
+        .cloud-tab {
+            flex: 1;
+            text-align: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: calc(var(--border-radius) - 3px);
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .cloud-tab.active {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+
+        .cloud-files {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: var(--border-radius);
+            transition: all 0.2s ease;
+        }
+
+        .file-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background-color: var(--secondary-color);
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: white;
+        }
+
+        .file-icon.video {
+            background-color: var(--warning-color);
+        }
+
+        .file-info {
+            flex-grow: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .file-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .download-btn {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        .download-btn:hover {
+            background-color: #219a52;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--secondary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .no-files {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        .no-files i {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.3;
+        }
+
+        .refresh-btn {
+            background-color: rgba(52, 152, 219, 0.2);
+            border: 1px solid rgba(52, 152, 219, 0.3);
+            color: var(--secondary-color);
+            padding: 6px 12px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .refresh-btn:hover {
+            background-color: rgba(52, 152, 219, 0.4);
+        }
+
+        /* 캡처 버튼 특별 스타일 */
+        .capture-btn {
+            background: linear-gradient(135deg, #FF6B6B, #4ECDC4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            font-weight: bold !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2) !important;
+            animation: pulse 2s infinite;
+        }
+
+        .capture-btn:hover {
+            background: linear-gradient(135deg, #FF5252, #26C6DA) !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2); }
+            50% { box-shadow: 0 3px 15px rgba(255, 107, 107, 0.4); }
+            100% { box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2); }
+        }
+
         /* 스크롤바 스타일 */
         ::-webkit-scrollbar {
             width: 8px;
@@ -611,6 +828,7 @@
                     <div class="option-btn" id="record-btn"><i class="fas fa-record-vinyl"></i> 녹화</div>
                     <div class="option-btn" id="rotate-btn"><i class="fas fa-sync"></i> 회전</div>
                     <div class="option-btn" id="settings-btn"><i class="fas fa-cog"></i> 설정</div>
+                    <div class="option-btn" id="test-fcm-btn"><i class="fas fa-bell"></i> FCM 테스트</div>
                     <div class="option-btn" id="restart-btn"><i class="fas fa-redo"></i> 재시작</div>
                 </div>
                 
@@ -645,6 +863,8 @@
                 </div>
             </div>
         </div>
+        
+
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
@@ -870,7 +1090,101 @@
                 }
             });
             
-            // 스냅샷 버튼 기능
+            // FCM/알림 테스트 버튼 기능
+            const testFcmBtn = document.getElementById('test-fcm-btn');
+            testFcmBtn.innerHTML = '<i class="fas fa-bell"></i> FCM 테스트';
+            testFcmBtn.addEventListener('click', () => {
+                // 로딩 표시
+                testFcmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 전송 중...';
+                testFcmBtn.disabled = true;
+                
+                // 서버에 FCM 테스트 요청
+                fetch('/test-fcm', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 성공 메시지 표시
+                        testFcmBtn.innerHTML = '<i class="fas fa-check"></i> 전송 완료';
+                        setTimeout(() => {
+                            testFcmBtn.innerHTML = '<i class="fas fa-bell"></i> FCM 테스트';
+                            testFcmBtn.disabled = false;
+                        }, 2000);
+                        
+                        // 성공 알림
+                        alert('FCM 테스트 알림이 발송되었습니다!');
+                    } else {
+                        // FCM 실패 시 간단한 알림으로 대체
+                        console.log('FCM 실패, 간단한 알림으로 대체:', data.error);
+                        
+                        const now = new Date();
+                        const timeString = now.toLocaleTimeString('ko-KR');
+                        
+                        if (Notification.permission === 'granted') {
+                            const notification = new Notification('🧪 SoNaVi 테스트 알림', {
+                                body: `테스트 시간: ${timeString}\n간단한 알림 시스템 작동 중`,
+                                icon: '/static/favicon.ico',
+                                badge: '/static/favicon.ico',
+                                tag: 'sonavi-test'
+                            });
+                            
+                            notification.onclick = function() {
+                                window.focus();
+                                notification.close();
+                            };
+                            
+                            testFcmBtn.innerHTML = '<i class="fas fa-check"></i> 테스트 완료';
+                            alert('간단한 알림 테스트가 완료되었습니다!');
+                        } else {
+                            alert('FCM 테스트 실패: ' + data.error);
+                            testFcmBtn.innerHTML = '<i class="fas fa-bell"></i> FCM 테스트';
+                        }
+                        
+                        setTimeout(() => {
+                            testFcmBtn.innerHTML = '<i class="fas fa-bell"></i> FCM 테스트';
+                            testFcmBtn.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('FCM 테스트 오류:', error);
+                    
+                    // 네트워크 오류 시에도 간단한 알림으로 대체
+                    const now = new Date();
+                    const timeString = now.toLocaleTimeString('ko-KR');
+                    
+                    if (Notification.permission === 'granted') {
+                        const notification = new Notification('🧪 SoNaVi 테스트 알림', {
+                            body: `테스트 시간: ${timeString}\n브라우저 알림 시스템 작동 중`,
+                            icon: '/static/favicon.ico',
+                            badge: '/static/favicon.ico',
+                            tag: 'sonavi-test'
+                        });
+                        
+                        notification.onclick = function() {
+                            window.focus();
+                            notification.close();
+                        };
+                        
+                        testFcmBtn.innerHTML = '<i class="fas fa-check"></i> 테스트 완료';
+                        alert('브라우저 알림 테스트가 완료되었습니다!');
+                    } else {
+                        alert('FCM 테스트 중 오류가 발생했습니다.');
+                        testFcmBtn.innerHTML = '<i class="fas fa-bell"></i> FCM 테스트';
+                    }
+                    
+                    setTimeout(() => {
+                        testFcmBtn.innerHTML = '<i class="fas fa-bell"></i> FCM 테스트';
+                        testFcmBtn.disabled = false;
+                    }, 2000);
+                });
+            });
+            
+            // 스냅샷 버튼 기능 (로컬 + 클라우드 동시 저장)
             const snapshotBtn = document.getElementById('snapshot-btn');
             snapshotBtn.addEventListener('click', () => {
                 // 현재 비디오 프레임 가져오기
@@ -884,7 +1198,7 @@
                 snapshotBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...';
                 snapshotBtn.disabled = true;
                 
-                // 서버에 저장 요청
+                // 서버에 저장 요청 (로컬 + 클라우드 자동 업로드)
                 fetch('/snapshot', {
                     method: 'POST',
                     headers: {
@@ -897,13 +1211,16 @@
                     if (data.success) {
                         // 성공 메시지 표시
                         snapshotBtn.innerHTML = '<i class="fas fa-check"></i> 저장 완료';
+                        
+
+                        
                         setTimeout(() => {
                             snapshotBtn.innerHTML = '<i class="fas fa-camera"></i> 스냅샷';
                             snapshotBtn.disabled = false;
                         }, 2000);
                         
                         // 저장된 파일 경로 알림
-                        alert(`스냅샷이 저장되었습니다: ${data.filename}`);
+                        alert(`📸 스냅샷이 저장되었습니다!\n📁 저장 경로: ${data.filename}`);
                     } else {
                         alert('스냅샷 저장 실패: ' + data.error);
                         snapshotBtn.innerHTML = '<i class="fas fa-camera"></i> 스냅샷';
@@ -918,7 +1235,7 @@
                 });
             });
             
-            // 녹화 버튼 기능
+            // 녹화 버튼 기능 (토글 방식, 로컬 + 클라우드 동시 저장)
             const recordBtn = document.getElementById('record-btn');
             let isRecording = false;
             let recordingStartTime = null;
@@ -930,8 +1247,9 @@
                     recordingStartTime = new Date();
                     
                     // 버튼 상태 변경
-                    recordBtn.innerHTML = '<i class="fas fa-stop-circle"></i> 녹화중...';
+                    recordBtn.innerHTML = '<i class="fas fa-stop-circle"></i> 녹화 중지';
                     recordBtn.classList.add('recording');
+                    recordBtn.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
                     
                     // 서버에 녹화 시작 요청
                     fetch('/record/start', { method: 'POST' })
@@ -942,6 +1260,10 @@
                                 isRecording = false;
                                 recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
                                 recordBtn.classList.remove('recording');
+                                recordBtn.style.background = '';
+                            } else {
+                                // 녹화 시간 표시 시작
+                                updateRecordingTime();
                             }
                         })
                         .catch(error => {
@@ -950,6 +1272,7 @@
                             isRecording = false;
                             recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
                             recordBtn.classList.remove('recording');
+                            recordBtn.style.background = '';
                         });
                     
                 } else {
@@ -959,25 +1282,29 @@
                     // 버튼 상태 변경
                     recordBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 저장 중...';
                     recordBtn.disabled = true;
+                    recordBtn.style.background = '';
                     
                     // 녹화 종료 시간 계산
                     const recordingEndTime = new Date();
                     const recordingDuration = Math.round((recordingEndTime - recordingStartTime) / 1000); // 초 단위
                     
-                    // 서버에 녹화 중지 요청
+                    // 서버에 녹화 중지 요청 (로컬 + 클라우드 자동 업로드)
                     fetch('/record/stop', { method: 'POST' })
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
                                 recordBtn.innerHTML = '<i class="fas fa-check"></i> 저장 완료';
+                                
+
+                                
                                 setTimeout(() => {
                                     recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
                                     recordBtn.classList.remove('recording');
                                     recordBtn.disabled = false;
-                                }, 2000);
+                                }, 3000);
                                 
                                 // 저장된 파일 경로 알림
-                                alert(`녹화가 저장되었습니다: ${data.filename}\n녹화 시간: ${recordingDuration}초`);
+                                alert(`🎬 녹화가 저장되었습니다!\n📁 저장 경로: ${data.filename}\n⏱️ 녹화 시간: ${recordingDuration}초`);
                             } else {
                                 alert('녹화 저장 실패: ' + data.error);
                                 recordBtn.innerHTML = '<i class="fas fa-record-vinyl"></i> 녹화';
@@ -994,7 +1321,226 @@
                         });
                 }
             });
+            
+            // 녹화 시간 실시간 표시 함수
+            function updateRecordingTime() {
+                if (!isRecording) return;
+                
+                const now = new Date();
+                const duration = Math.round((now - recordingStartTime) / 1000);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                recordBtn.innerHTML = `<i class="fas fa-stop-circle"></i> 중지 (${timeString})`;
+                
+                setTimeout(updateRecordingTime, 1000);
+            }
+            
+            // 회전 버튼 기능
+            const rotateBtn = document.getElementById('rotate-btn');
+            rotateBtn.addEventListener('click', () => {
+                // 회전 기능 플레이스홀더
+                alert('회전 기능은 추후 구현 예정입니다.');
+            });
         });
+        
+        // Firebase FCM 초기화 (새로운 설정으로 재시도)
+        const firebaseConfig = {
+            apiKey: "AIzaSyANsefS1-YeoWl3UlPNbIi_xCITYuzw72k",
+            authDomain: "sonavi-home-cctv-bf6e3.firebaseapp.com",
+            projectId: "sonavi-home-cctv-bf6e3",
+            storageBucket: "sonavi-home-cctv-bf6e3.firebasestorage.app",
+            messagingSenderId: "197851756576",
+            appId: "1:197851756576:web:5f51a003e5b2ee3c1c2445"
+        };
+        
+        let messaging = null;
+        
+        // Firebase 초기화 및 서비스 워커 등록
+        try {
+            firebase.initializeApp(firebaseConfig);
+            console.log('✅ Firebase 앱 초기화 완료 (새로운 설정)');
+            
+            // 서비스 워커 등록
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker 등록 성공:', registration);
+                        
+                        // FCM 메시징 초기화 (서비스 워커 등록 후)
+                        messaging = firebase.messaging();
+                        console.log('✅ FCM 메시징 초기화 완료');
+                        
+                        // 포그라운드 메시지 수신 핸들러 설정
+                        setupMessageHandlers();
+                        
+                        // FCM 초기화 함수 호출
+                        initializeFCM();
+                        
+                    })
+                    .catch((error) => {
+                        console.error('❌ Service Worker 등록 실패:', error);
+                        // Firebase 실패 시 간단한 알림으로 대체
+                        console.log('🔄 간단한 알림 시스템으로 대체합니다.');
+                        initializeSimpleNotification();
+                    });
+            } else {
+                console.error('❌ 이 브라우저는 Service Worker를 지원하지 않습니다.');
+                initializeSimpleNotification();
+            }
+            
+        } catch (error) {
+            console.error('❌ Firebase 초기화 실패:', error);
+            initializeSimpleNotification();
+        }
+        
+        // 알림 권한 요청 및 토큰 획득
+        function initializeFCM() {
+            console.log('🔑 VAPID 키:', "{{ vapid_key }}");
+            
+            if (!messaging) {
+                console.error('❌ FCM 메시징 객체가 초기화되지 않았습니다.');
+                initializeSimpleNotification();
+                return;
+            }
+            
+            // 알림 권한 요청
+            Notification.requestPermission().then((permission) => {
+                if (permission === 'granted') {
+                    console.log('✅ 알림 권한이 승인되었습니다.');
+                    
+                    // FCM 토큰 획득 (VAPID 키와 함께)
+                    messaging.getToken({ 
+                        vapidKey: "{{ vapid_key }}" 
+                    }).then((token) => {
+                        if (token) {
+                            console.log('✅ FCM 토큰 획득 성공:', token);
+                            
+                            // 서버에 토큰 등록
+                            fetch('/fcm/register', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ token: token })
+                            }).then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    console.log('✅ FCM 토큰이 서버에 등록되었습니다.');
+                                    // 상태 표시 업데이트
+                                    const statusElement = document.getElementById('status');
+                                    if (statusElement && statusElement.className === 'connected') {
+                                        statusElement.innerHTML += ' <i class="fas fa-bell" title="푸시 알림 활성화" style="color: #4CAF50;"></i>';
+                                    }
+                                } else {
+                                    console.error('❌ FCM 토큰 등록 실패:', data.error);
+                                }
+                            }).catch(error => {
+                                console.error('❌ FCM 토큰 등록 중 오류:', error);
+                            });
+                            
+                        } else {
+                            console.log('❌ FCM 토큰을 가져올 수 없습니다.');
+                        }
+                    }).catch((err) => {
+                        console.log('❌ FCM 토큰 획득 중 오류 발생:', err);
+                        console.log('🔄 간단한 알림으로 대체합니다.');
+                        initializeSimpleNotification();
+                    });
+                    
+                } else {
+                    console.log('❌ 알림 권한이 거부되었습니다.');
+                    initializeSimpleNotification();
+                }
+            });
+        }
+        
+        // 포그라운드 메시지 수신 핸들러 설정
+        function setupMessageHandlers() {
+            if (!messaging) {
+                console.error('❌ FCM 메시징 객체가 없어서 메시지 핸들러를 설정할 수 없습니다.');
+                return;
+            }
+            
+            messaging.onMessage((payload) => {
+                console.log('📱 포그라운드에서 메시지 수신:', payload);
+                
+                // 커스텀 알림 표시
+                const notificationTitle = payload.notification.title;
+                const notificationOptions = {
+                    body: payload.notification.body,
+                    icon: payload.notification.icon || '/static/favicon.ico',
+                    badge: payload.notification.badge || '/static/favicon.ico',
+                    data: payload.data
+                };
+                
+                if (Notification.permission === 'granted') {
+                    const notification = new Notification(notificationTitle, notificationOptions);
+                    
+                    notification.onclick = function(event) {
+                        event.preventDefault();
+                        window.focus();
+                        notification.close();
+                    };
+                }
+            });
+        }
+
+        // 간단한 알림 시스템 (FCM 대신 백업용)
+        function initializeSimpleNotification() {
+            console.log('🔔 간단한 알림 시스템 초기화');
+            
+            // 알림 권한 요청
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then((permission) => {
+                    if (permission === 'granted') {
+                        console.log('✅ 알림 권한이 승인되었습니다.');
+                        showTestNotification();
+                    } else {
+                        console.log('❌ 알림 권한이 거부되었습니다.');
+                    }
+                });
+            } else if (Notification.permission === 'granted') {
+                console.log('✅ 알림 권한이 이미 승인되어 있습니다.');
+                showTestNotification();
+            }
+        }
+        
+        function showTestNotification() {
+            const notification = new Notification('🏠 SoNaVi 카메라 시스템', {
+                body: '알림 시스템이 활성화되었습니다!',
+                icon: '/static/favicon.ico',
+                badge: '/static/favicon.ico',
+                tag: 'sonavi-test'
+            });
+            
+            notification.onclick = function() {
+                window.focus();
+                notification.close();
+            };
+            
+            setTimeout(() => notification.close(), 5000);
+        }
+        
+        function showDetectionNotification(message) {
+            if (Notification.permission === 'granted') {
+                const notification = new Notification('🚨 SoNaVi 감지 알림', {
+                    body: message,
+                    icon: '/static/favicon.ico',
+                    badge: '/static/favicon.ico',
+                    tag: 'sonavi-detection',
+                    requireInteraction: true
+                });
+                
+                notification.onclick = function() {
+                    window.focus();
+                    notification.close();
+                };
+            }
+        }
+        
+
     </script>
 </body>
 </html>

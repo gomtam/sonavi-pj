@@ -8,6 +8,7 @@ import socket
 import struct
 import pickle
 import json
+import requests
 from datetime import datetime
 from flask import Flask, render_template, Response, request, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
@@ -22,6 +23,10 @@ import subprocess
 import gc
 import torch
 from ultralytics import YOLO
+from twilio.rest import Client
+from firebase_fcm import FirebaseFCM
+import piexif
+import re
 
 # 스냅샷과 녹화를 위한 디렉토리 설정
 SNAPSHOTS_DIR = "snapshots"
@@ -32,15 +37,363 @@ os.makedirs(SNAPSHOTS_DIR, exist_ok=True)
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret_key_for_smart_home_cam'
+app.config['SECRET_KEY'] = 'smart_home_secret_key_2024!'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # 전역 변수로 프로그램 실행 상태 관리
 running = True
 
+# DuckDNS 인스턴스
+duckdns_updater = None
+
+# Twilio SMS 인스턴스
+twilio_sms = None
+
+# Firebase FCM 인스턴스
+firebase_fcm = None
+
+# Cloudflare Tunnel 인스턴스
+cloudflare_tunnel = None
+
 # 기본 인증 정보 (기본값)
 USERNAME = 'admin'
 PASSWORD = 'smarthome'
+
+class DuckDNSUpdater:
+    """DuckDNS 자동 업데이트 클래스"""
+    
+    def __init__(self):
+        self.enabled = False
+        self.domain = ""
+        self.token = ""
+        self.update_interval = 300  # 5분
+        self.current_ip = ""
+        self.update_thread = None
+        self.running = False
+        self.load_config()
+        
+    def load_config(self):
+        """config.json에서 DuckDNS 설정을 로드합니다."""
+        try:
+            with open('config.json', 'r') as f:
+                config = json.load(f)
+                duckdns_settings = config.get('duckdns_settings', {})
+                self.enabled = duckdns_settings.get('enabled', False)
+                self.domain = duckdns_settings.get('domain', '')
+                self.token = duckdns_settings.get('token', '')
+                self.update_interval = duckdns_settings.get('update_interval', 300)
+                
+                if self.enabled and (not self.domain or not self.token):
+                    print("경고: DuckDNS가 활성화되어 있지만 도메인 또는 토큰이 설정되지 않았습니다.")
+                    self.enabled = False
+                    
+        except FileNotFoundError:
+            print("설정 파일을 찾을 수 없습니다. DuckDNS 기능이 비활성화됩니다.")
+        except json.JSONDecodeError:
+            print("설정 파일 형식이 잘못되었습니다. DuckDNS 기능이 비활성화됩니다.")
+            
+    def get_public_ip(self):
+        """현재 공인 IP 주소를 가져옵니다."""
+        try:
+            # 여러 서비스를 시도하여 안정성 확보
+            services = [
+                'https://ipv4.icanhazip.com',
+                'https://api.ipify.org',
+                'https://checkip.amazonaws.com'
+            ]
+            
+            for service in services:
+                try:
+                    response = requests.get(service, timeout=10)
+                    if response.status_code == 200:
+                        ip = response.text.strip()
+                        # IP 주소 형식 검증
+                        parts = ip.split('.')
+                        if len(parts) == 4 and all(0 <= int(part) <= 255 for part in parts):
+                            return ip
+                except Exception:
+                    continue
+                    
+            return None
+            
+        except Exception as e:
+            print(f"공인 IP 주소 확인 중 오류: {e}")
+            return None
+            
+    def update_duckdns(self, ip=None):
+        """DuckDNS에 IP 주소를 업데이트합니다."""
+        try:
+            if not self.enabled:
+                return False, "DuckDNS가 비활성화되어 있습니다."
+                
+            if ip is None:
+                ip = self.get_public_ip()
+                
+            if not ip:
+                return False, "공인 IP 주소를 가져올 수 없습니다."
+                
+            # DuckDNS API 호출
+            url = f"https://www.duckdns.org/update?domains={self.domain}&token={self.token}&ip={ip}"
+            
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                if response.text.strip() == 'OK':
+                    self.current_ip = ip
+                    print(f"DuckDNS 업데이트 성공: {self.domain}.duckdns.org -> {ip}")
+                    return True, f"성공: {ip}"
+                else:
+                    return False, f"DuckDNS 응답 오류: {response.text}"
+            else:
+                return False, f"HTTP 오류: {response.status_code}"
+                
+        except Exception as e:
+            print(f"DuckDNS 업데이트 중 오류: {e}")
+            return False, str(e)
+            
+    def start_auto_update(self):
+        """자동 업데이트를 시작합니다."""
+        if not self.enabled:
+            print("DuckDNS가 비활성화되어 있습니다.")
+            return
+            
+        print(f"DuckDNS 자동 업데이트 시작: {self.domain}.duckdns.org ({self.update_interval}초 간격)")
+        
+        # 즉시 한 번 업데이트
+        success, result = self.update_duckdns()
+        if success:
+            print(f"초기 DuckDNS 업데이트 완료: {result}")
+        else:
+            print(f"초기 DuckDNS 업데이트 실패: {result}")
+        
+        self.running = True
+        self.update_thread = threading.Thread(target=self._update_worker)
+        self.update_thread.daemon = True
+        self.update_thread.start()
+        
+    def _update_worker(self):
+        """백그라운드에서 주기적으로 IP를 업데이트합니다."""
+        while self.running:
+            try:
+                time.sleep(self.update_interval)
+                
+                if not self.running:
+                    break
+                    
+                new_ip = self.get_public_ip()
+                if new_ip and new_ip != self.current_ip:
+                    success, result = self.update_duckdns(new_ip)
+                    if success:
+                        print(f"IP 변경 감지 및 업데이트: {self.current_ip} -> {new_ip}")
+                    else:
+                        print(f"IP 업데이트 실패: {result}")
+                        
+            except Exception as e:
+                print(f"DuckDNS 자동 업데이트 오류: {e}")
+                
+    def stop(self):
+        """자동 업데이트를 중지합니다."""
+        self.running = False
+        if self.update_thread and self.update_thread.is_alive():
+            print("DuckDNS 자동 업데이트 중지 중...")
+            self.update_thread.join(timeout=5)
+            print("DuckDNS 자동 업데이트 중지 완료")
+
+class TwilioSMS:
+    """Twilio SMS 발송 클래스"""
+    
+    def __init__(self):
+        self.enabled = False
+        self.account_sid = ""
+        self.auth_token = ""
+        self.from_number = ""
+        self.to_number = ""
+        self.send_on_detection = True
+        self.detection_cooldown = 300  # 5분
+        self.client = None
+        self.last_sms_time = {}
+        self.load_config()
+        
+    def load_config(self):
+        """config.json에서 Twilio 설정을 로드합니다."""
+        try:
+            with open('config.json', 'r') as f:
+                config = json.load(f)
+                twilio_settings = config.get('twilio_settings', {})
+                self.enabled = twilio_settings.get('enabled', False)
+                self.account_sid = twilio_settings.get('account_sid', '')
+                self.auth_token = twilio_settings.get('auth_token', '')
+                self.from_number = twilio_settings.get('from_number', '')
+                self.to_number = twilio_settings.get('to_number', '')
+                self.send_on_detection = twilio_settings.get('send_on_detection', True)
+                self.detection_cooldown = twilio_settings.get('detection_cooldown', 300)
+                
+                if self.enabled:
+                    if not all([self.account_sid, self.auth_token, self.from_number, self.to_number]):
+                        print("경고: Twilio가 활성화되어 있지만 필수 정보가 누락되었습니다.")
+                        self.enabled = False
+                    else:
+                        try:
+                            self.client = Client(self.account_sid, self.auth_token)
+                            print(f"Twilio SMS 클라이언트 초기화 완료: {self.from_number} → {self.to_number}")
+                        except Exception as e:
+                            print(f"Twilio 클라이언트 초기화 실패: {e}")
+                            self.enabled = False
+                            
+        except FileNotFoundError:
+            print("설정 파일을 찾을 수 없습니다. Twilio SMS 기능이 비활성화됩니다.")
+        except json.JSONDecodeError:
+            print("설정 파일 형식이 잘못되었습니다. Twilio SMS 기능이 비활성화됩니다.")
+            
+    def send_sms(self, message):
+        """SMS를 발송합니다."""
+        if not self.enabled:
+            return False, "Twilio SMS가 비활성화되어 있습니다."
+            
+        if not self.client:
+            return False, "Twilio 클라이언트가 초기화되지 않았습니다."
+            
+        try:
+            message_obj = self.client.messages.create(
+                body=message,
+                from_=self.from_number,
+                to=self.to_number
+            )
+            
+            print(f"SMS 발송 성공: {message_obj.sid}")
+            return True, message_obj.sid
+            
+        except Exception as e:
+            print(f"SMS 발송 실패: {e}")
+            return False, str(e)
+            
+    def send_detection_alert(self, detected_object, confidence):
+        """객체 감지 시 알림 SMS를 발송합니다."""
+        if not self.enabled or not self.send_on_detection:
+            return False, "감지 알림이 비활성화되어 있습니다."
+            
+        current_time = time.time()
+        
+        # 쿨다운 체크
+        if detected_object in self.last_sms_time:
+            time_diff = current_time - self.last_sms_time[detected_object]
+            if time_diff < self.detection_cooldown:
+                remaining_time = int(self.detection_cooldown - time_diff)
+                return False, f"쿨다운 중입니다. {remaining_time}초 후 재시도 가능합니다."
+                
+        # SMS 메시지 작성
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        message = f"🏠 스마트홈 카메라 알림\n\n감지된 객체: {detected_object}\n신뢰도: {confidence:.1%}\n시간: {current_time_str}\n\n확인: http://sonavi.duckdns.org:5000"
+        
+        # SMS 발송
+        success, result = self.send_sms(message)
+        
+        if success:
+            self.last_sms_time[detected_object] = current_time
+            print(f"감지 알림 SMS 발송 완료: {detected_object} ({confidence:.1%})")
+            return True, result
+        else:
+            return False, result
+            
+    def send_test_sms(self):
+        """테스트 SMS를 발송합니다."""
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        message = f"🧪 스마트홈 카메라 테스트\n\n시간: {current_time_str}\n상태: 정상 작동 중\n\nTwilio SMS 연결 테스트 완료!"
+        
+        return self.send_sms(message)
+
+class CloudflareTunnel:
+    def __init__(self):
+        self.process = None
+        self.tunnel_url = None
+        self.enabled = True
+        self.executable_path = "cloudflared.exe"
+        
+    def check_cloudflared(self):
+        """cloudflared 실행 파일이 있는지 확인"""
+        try:
+            result = subprocess.run([self.executable_path, '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+            return result.returncode == 0
+        except:
+            return False
+            
+    def start_tunnel(self, local_port=5000):
+        """Cloudflare Tunnel 시작 및 URL 추출"""
+        if not self.check_cloudflared():
+            print()
+            print("❌ cloudflared.exe를 찾을 수 없습니다.")
+            print("   📥 다운로드: https://github.com/cloudflare/cloudflared/releases")
+            print("   📁 위치: 프로그램과 같은 폴더에 cloudflared.exe 파일을 저장하세요")
+            print("   ⚠️ Cloudflare Tunnel 기능이 비활성화됩니다.")
+            print()
+            self.enabled = False
+            return None
+            
+        try:
+            print("🌐 Cloudflare Tunnel 시작 중...")
+            
+            # cloudflared 실행
+            cmd = [self.executable_path, 'tunnel', '--url', f'http://localhost:{local_port}']
+            self.process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1
+            )
+            
+            # URL 추출을 위한 별도 스레드
+            url_thread = threading.Thread(target=self._extract_url, daemon=True)
+            url_thread.start()
+            
+            # URL 추출을 위해 최대 30초 대기
+            for _ in range(30):
+                if self.tunnel_url:
+                    return self.tunnel_url
+                time.sleep(1)
+            
+            print("⚠️ Cloudflare Tunnel URL을 추출하는데 시간이 걸리고 있습니다...")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Cloudflare Tunnel 시작 실패: {e}")
+            self.enabled = False
+            return None
+    
+    def _extract_url(self):
+        """터널 프로세스 출력에서 URL 추출"""
+        try:
+            for line in iter(self.process.stdout.readline, ''):
+                if line:
+                    print(f"Cloudflare: {line.strip()}")
+                    
+                    # URL 패턴 찾기
+                    url_match = re.search(r'https://[a-zA-Z0-9\-]+\.trycloudflare\.com', line)
+                    if url_match:
+                        self.tunnel_url = url_match.group(0)
+                        print()
+                        print("🎉" + "=" * 50)
+                        print(f"  Cloudflare Tunnel 준비 완료!")
+                        print(f"  📍 외부 접속 URL: {self.tunnel_url}")
+                        print(f"  🔗 어디서든 접속 가능합니다!")
+                        print("=" * 52)
+                        print()
+                        break
+                        
+        except Exception as e:
+            print(f"❌ URL 추출 중 오류: {e}")
+    
+    def stop(self):
+        """터널 중지"""
+        if self.process:
+            try:
+                self.process.terminate()
+                self.process.wait(timeout=5)
+                print("🔴 Cloudflare Tunnel이 중지되었습니다.")
+            except:
+                self.process.kill()
+                print("🔴 Cloudflare Tunnel이 강제 종료되었습니다.")
 
 # 설정 파일에서 인증 정보 로드
 def load_auth_config():
@@ -78,15 +431,29 @@ def signal_handler(sig, frame):
 
 def cleanup_and_exit():
     """리소스를 정리하고 프로그램을 강제 종료합니다."""
+    global duckdns_updater, cloudflare_tunnel, firebase_fcm
     print("\n프로그램 종료 중...")
     
     try:
+        # Firebase FCM 토큰 정리 (프로그램 종료 시)
+        if 'firebase_fcm' in globals() and firebase_fcm is not None:
+            firebase_fcm.shutdown_token_management()
+        
+        # DuckDNS 자동 업데이트 중지
+        if duckdns_updater:
+            duckdns_updater.stop()
+        
         # 홈캠 인스턴스 정지
         if 'home_cam' in globals() and home_cam is not None:
             home_cam.stop()
             
         # 열린 창 닫기
         cv2.destroyAllWindows()
+        
+        # Cloudflare Tunnel 중지
+        if cloudflare_tunnel:
+            cloudflare_tunnel.stop()
+        
     except Exception as e:
         print(f"정리 중 오류: {e}")
     
@@ -285,6 +652,8 @@ class SmartHomeCam:
 
     def process_notifications(self, detections):
         """감지된 객체에 대한 알림을 처리합니다."""
+        global twilio_sms, firebase_fcm, duckdns_updater
+        
         if not detections:
             return
             
@@ -295,7 +664,47 @@ class SmartHomeCam:
                 if label not in self.last_notification_time or \
                    (current_time - self.last_notification_time[label]) > self.notification_cooldown:
                     
-                    # 감지 시간만 기록하고 메시지 출력하지 않음
+                    # Firebase FCM 알림 발송 (우선순위)
+                    if firebase_fcm:
+                        try:
+                            # DuckDNS URL 생성
+                            duckdns_url = "http://localhost:5000"
+                            if duckdns_updater and duckdns_updater.enabled and duckdns_updater.domain:
+                                duckdns_url = f"http://{duckdns_updater.domain}.duckdns.org:5000"
+                            
+                            # 감지된 객체 정보 구성
+                            detected_objects = [{'name': label, 'confidence': confidence}]
+                            
+                            # FCM 알림 발송 (새로운 설정으로 재시도)
+                            try:
+                                success = firebase_fcm.send_detection_alert(
+                                    detected_objects, 
+                                    confidence,
+                                    duckdns_url
+                                )
+                                
+                                if success:
+                                    print(f"📱 FCM 알림 발송 완료: {label} ({confidence:.1f}%)")
+                                else:
+                                    print(f"⚠️ FCM 알림 발송 실패 (토큰 없거나 쿨다운): {label}")
+                            except Exception as fcm_error:
+                                print(f"FCM 발송 중 오류: {fcm_error}")
+                
+                            # 콘솔 출력
+                            print(f"🔔 감지 알림: {label} ({confidence:.1f}%)")
+                                
+                        except Exception as e:
+                            print(f"FCM 발송 중 오류: {e}")
+            
+                    # Twilio SMS 알림 발송 (백업용)
+                    if twilio_sms and twilio_sms.enabled:
+                        success, result = twilio_sms.send_detection_alert(label, confidence)
+                        if success:
+                            print(f"📱 SMS 알림 발송 성공: {label}")
+                        else:
+                            print(f"❌ SMS 알림 발송 실패: {result}")
+                    
+                    # 감지 시간 기록
                     self.last_notification_time[label] = current_time
 
     
@@ -520,7 +929,7 @@ class SmartHomeCam:
         except Exception as e:
             print(f"스냅샷 저장 중 오류 발생: {e}")
             return False, str(e)
-            
+    
     def start_recording(self):
         """비디오 녹화를 시작합니다."""
         if self.is_recording:
@@ -685,7 +1094,8 @@ class SmartHomeCam:
 @requires_auth
 def index():
     """웹 인터페이스 메인 페이지를 제공합니다."""
-    return render_template('index.html')
+    from firebase_config import VAPID_KEY
+    return render_template('index.html', vapid_key=VAPID_KEY)
 
 @app.route('/restart', methods=['POST'])
 @requires_auth
@@ -734,6 +1144,22 @@ def shutdown():
 def goodbye():
     """종료 페이지를 표시합니다."""
     return render_template('goodbye.html')
+
+@app.route('/firebase-messaging-sw.js')
+def firebase_sw():
+    """Firebase Service Worker 파일 제공"""
+    from flask import Response
+    try:
+        with open('static/firebase-messaging-sw.js', 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='application/javascript')
+    except FileNotFoundError:
+        return Response('console.log("Service Worker file not found");', mimetype='application/javascript'), 404
+
+@app.route('/favicon.ico')
+def favicon():
+    """Favicon 파일 제공"""
+    return app.send_static_file('favicon.ico')
 
 # 스냅샷 및 녹화 API 경로 추가
 @app.route('/snapshot', methods=['POST'])
@@ -790,6 +1216,148 @@ def stop_recording():
     except Exception as e:
         print(f"녹화 중지 처리 중 오류: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/test-sms', methods=['POST'])
+@requires_auth
+def test_sms():
+    """Twilio SMS 테스트를 수행합니다."""
+    global twilio_sms
+    
+    try:
+        if not twilio_sms:
+            return jsonify({'success': False, 'error': 'Twilio SMS가 초기화되지 않았습니다.'}), 500
+            
+        success, result = twilio_sms.send_test_sms()
+        
+        if success:
+            return jsonify({'success': True, 'message_sid': result})
+        else:
+            return jsonify({'success': False, 'error': result}), 400
+    
+    except Exception as e:
+        print(f"SMS 테스트 중 오류: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/fcm/register', methods=['POST'])
+@requires_auth
+def register_fcm_token():
+    """FCM 토큰 등록"""
+    global firebase_fcm
+    
+    print("🔍 /fcm/register 엔드포인트 호출됨")
+    
+    if not firebase_fcm:
+        print("❌ Firebase FCM이 초기화되지 않았습니다.")
+        return jsonify({
+            'success': False,
+            'error': 'Firebase FCM이 초기화되지 않았습니다.'
+        })
+    
+    try:
+        data = request.get_json()
+        print(f"🔍 받은 데이터: {data}")
+        
+        token = data.get('token') if data else None
+        
+        if not token:
+            print("❌ FCM 토큰이 제공되지 않았습니다.")
+            return jsonify({
+                'success': False,
+                'error': 'FCM 토큰이 제공되지 않았습니다.'
+            })
+        
+        print(f"🔍 받은 FCM 토큰 길이: {len(token)} 문자")
+        print(f"🔍 토큰 앞 20자: {token[:20]}...")
+        
+        # 기존 토큰 개수 확인
+        before_count = len(firebase_fcm.device_tokens)
+        print(f"🔍 토큰 등록 전 개수: {before_count}")
+        
+        firebase_fcm.add_device_token(token)
+        
+        # 등록 후 토큰 개수 확인
+        after_count = len(firebase_fcm.device_tokens)
+        print(f"🔍 토큰 등록 후 개수: {after_count}")
+        
+        print("✅ FCM 토큰이 성공적으로 등록되었습니다!")
+        
+        return jsonify({
+            'success': True,
+            'message': f'FCM 토큰이 성공적으로 등록되었습니다. (총 {after_count}개 토큰)'
+        })
+        
+    except Exception as e:
+        print(f"❌ FCM 토큰 등록 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'FCM 토큰 등록 중 오류: {str(e)}'
+        })
+
+@app.route('/fcm/tokens', methods=['GET'])
+@requires_auth
+def get_fcm_tokens():
+    """현재 등록된 FCM 토큰 정보 조회"""
+    global firebase_fcm
+    
+    if not firebase_fcm:
+        return jsonify({
+            'success': False,
+            'error': 'Firebase FCM이 초기화되지 않았습니다.'
+        })
+    
+    try:
+        token_info = firebase_fcm.get_token_info()
+        return jsonify({
+            'success': True,
+            'data': token_info
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'토큰 정보 조회 중 오류: {str(e)}'
+        })
+
+@app.route('/test-fcm', methods=['POST'])
+@requires_auth
+def test_fcm():
+    """FCM 테스트 알림 전송"""
+    global firebase_fcm
+    
+    print("🔍 /test-fcm 엔드포인트 호출됨")
+    
+    if not firebase_fcm:
+        print("❌ Firebase FCM이 초기화되지 않았습니다.")
+        return jsonify({
+            'success': False,
+            'error': 'Firebase FCM이 초기화되지 않았습니다.'
+        })
+    
+    # 토큰 정보 상세 출력
+    token_info = firebase_fcm.get_token_info()
+    print(f"🔍 현재 등록된 토큰 수: {token_info['total_tokens']}")
+    print(f"🔍 토큰 미리보기: {token_info['tokens_preview']}")
+    
+    try:
+        success = firebase_fcm.test_notification()
+        
+        print(f"🔍 FCM 전송 결과: {success}")
+        
+        return jsonify({
+            'success': success,
+            'message': f'FCM 테스트 알림이 발송되었습니다. (등록된 토큰: {token_info["total_tokens"]}개)' if success else f'FCM 테스트 알림 발송에 실패했습니다. (등록된 토큰: {token_info["total_tokens"]}개)',
+            'token_count': token_info['total_tokens']
+        })
+        
+    except Exception as e:
+        print(f"❌ /test-fcm 예외 발생: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'FCM 테스트 알림 전송 중 오류: {str(e)}'
+        })
 
 # 웹소켓 이벤트
 @socketio.on('connect')
@@ -860,6 +1428,7 @@ if __name__ == "__main__":
             display: flex;
             justify-content: center;
             gap: 10px;
+            flex-wrap: wrap;
         }
         button {
             background-color: #4CAF50;
@@ -879,6 +1448,18 @@ if __name__ == "__main__":
         }
         button.danger:hover {
             background-color: #d32f2f;
+        }
+        button.notification {
+            background-color: #2196F3;
+        }
+        button.notification:hover {
+            background-color: #1976D2;
+        }
+        button.test {
+            background-color: #FF9800;
+        }
+        button.test:hover {
+            background-color: #F57C00;
         }
         .detections {
             margin-top: 20px;
@@ -904,11 +1485,30 @@ if __name__ == "__main__":
             border-radius: 4px;
             text-align: center;
         }
+        .notification-status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .notification-enabled {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .notification-disabled {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .notification-pending {
+            background-color: #fff3e0;
+            color: #ef6c00;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>YOLOv5 스마트홈 카메라</h1>
+        <h1>🏠 YOLOv5 스마트홈 카메라 🎥</h1>
         
         <div class="camera-feed">
             <img id="video-feed" src="" alt="카메라 스트림">
@@ -918,6 +1518,16 @@ if __name__ == "__main__":
         <div class="controls">
             <button id="restart-btn">카메라 재시작</button>
             <button id="shutdown-btn" class="danger">프로그램 종료</button>
+            <button id="enable-notifications-btn" class="notification">알림 권한 요청</button>
+            <button id="test-fcm-btn" class="test">푸시 알림 테스트</button>
+        </div>
+        
+        <div id="notification-status" class="notification-status notification-disabled">
+            📱 푸시 알림: 비활성화
+        </div>
+        
+        <div id="token-info" style="margin-top: 10px; padding: 8px; background-color: #f5f5f5; border-radius: 4px; font-size: 12px; color: #666;">
+            🔑 등록된 토큰: 확인 중...
         </div>
         
         <div class="detections">
@@ -926,8 +1536,258 @@ if __name__ == "__main__":
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
     <script>
+        // Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyBoSjqjyHo6Yr-IHHuslSJ_AGVZG3QXJdU",
+            authDomain: "sonavi-home-cctv-bf6e3.firebaseapp.com", 
+            projectId: "sonavi-home-cctv-bf6e3",
+            storageBucket: "sonavi-home-cctv-bf6e3.firebasestorage.app",
+            messagingSenderId: "568007893096",
+            appId: "1:568007893096:web:8b7ddfde89fe4cc6b8ede8"
+        };
+        
+        // Firebase 초기화
+        firebase.initializeApp(firebaseConfig);
+        const messaging = firebase.messaging();
+        
+        // VAPID 키 설정
+        const vapidKey = "{{ vapid_key }}";
+        
+        let fcmToken = null;
+        let notificationStatus = 'disabled';
+        
+        // 상태 업데이트 함수들
+        function updateNotificationStatus(status, message) {
+            const statusDiv = document.getElementById('notification-status');
+            const enableBtn = document.getElementById('enable-notifications-btn');
+            
+            notificationStatus = status;
+            statusDiv.className = `notification-status notification-${status}`;
+            
+            switch(status) {
+                case 'enabled':
+                    statusDiv.innerHTML = '📱 푸시 알림: 활성화 ✅';
+                    enableBtn.textContent = '알림 비활성화';
+                    enableBtn.className = 'button danger';
+                    break;
+                case 'disabled':
+                    statusDiv.innerHTML = '📱 푸시 알림: 비활성화 ❌';
+                    enableBtn.textContent = '알림 권한 요청';
+                    enableBtn.className = 'button notification';
+                    break;
+                case 'pending':
+                    statusDiv.innerHTML = '📱 푸시 알림: 권한 요청 중... ⏳';
+                    enableBtn.textContent = '요청 중...';
+                    enableBtn.disabled = true;
+                    break;
+            }
+            
+            if (message) {
+                console.log(`알림 상태: ${message}`);
+            }
+        }
+        
+        // FCM 토큰 등록
+        async function registerFCMToken(token) {
+            try {
+                const response = await fetch('/fcm/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: token })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    console.log('✅ FCM 토큰 등록 성공:', result.message);
+                    updateNotificationStatus('enabled', 'FCM 토큰 등록 완료');
+                    updateTokenInfo(); // 토큰 정보 즉시 업데이트
+                    return true;
+                } else {
+                    console.error('❌ FCM 토큰 등록 실패:', result.error);
+                    updateNotificationStatus('disabled', `토큰 등록 실패: ${result.error}`);
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ FCM 토큰 등록 요청 오류:', error);
+                updateNotificationStatus('disabled', `요청 오류: ${error.message}`);
+                return false;
+            }
+        }
+        
+        // 알림 권한 요청 및 토큰 생성
+        async function requestNotificationPermission() {
+            try {
+                console.log('🔔 알림 권한 요청 중...');
+                updateNotificationStatus('pending');
+                
+                // 현재 권한 상태 확인
+                console.log('현재 알림 권한 상태:', Notification.permission);
+                
+                // 알림 권한 요청
+                const permission = await Notification.requestPermission();
+                console.log('알림 권한 응답:', permission);
+                
+                if (permission === 'granted') {
+                    console.log('✅ 알림 권한 승인됨');
+                    
+                    // Service Worker 등록
+                    if ('serviceWorker' in navigator) {
+                        console.log('🔧 Service Worker 등록 중...');
+                        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                        console.log('✅ Service Worker 등록 완료:', registration);
+                    } else {
+                        console.warn('⚠️ 이 브라우저는 Service Worker를 지원하지 않습니다');
+                    }
+                    
+                    // FCM 토큰 생성
+                    console.log('🔑 FCM 토큰 생성 중...');
+                    console.log('사용할 VAPID 키:', vapidKey);
+                    
+                    const token = await messaging.getToken({ 
+                        vapidKey: vapidKey,
+                        serviceWorkerRegistration: await navigator.serviceWorker.ready
+                    });
+                    
+                    if (token) {
+                        console.log('✅ FCM 토큰 생성 완료!');
+                        console.log('토큰 길이:', token.length, '문자');
+                        console.log('토큰 앞 20자:', token.substring(0, 20) + '...');
+                        fcmToken = token;
+                        
+                        // 서버에 토큰 등록
+                        console.log('🌐 서버에 토큰 등록 중...');
+                        const registered = await registerFCMToken(token);
+                        
+                        if (registered) {
+                            console.log('🎉 모든 설정 완료! 푸시 알림을 받을 수 있습니다.');
+                            
+                            // 토큰 갱신 감지
+                            messaging.onTokenRefresh(async () => {
+                                console.log('🔄 FCM 토큰 갱신됨');
+                                const refreshedToken = await messaging.getToken({ vapidKey: vapidKey });
+                                if (refreshedToken) {
+                                    fcmToken = refreshedToken;
+                                    await registerFCMToken(refreshedToken);
+                                }
+                            });
+                            
+                            // 포그라운드 메시지 수신
+                            messaging.onMessage((payload) => {
+                                console.log('📨 포그라운드 메시지 수신:', payload);
+                                
+                                // 브라우저 알림 표시
+                                if (payload.notification) {
+                                    new Notification(payload.notification.title, {
+                                        body: payload.notification.body,
+                                        icon: '/static/icon-192x192.png'
+                                    });
+                                }
+                            });
+                        }
+                    } else {
+                        throw new Error('FCM 토큰이 생성되지 않았습니다. VAPID 키를 확인해주세요.');
+                    }
+                } else if (permission === 'denied') {
+                    throw new Error('알림 권한이 거부되었습니다. 브라우저 설정에서 알림을 허용해주세요.');
+                } else {
+                    throw new Error(`알림 권한이 기본값입니다: ${permission}`);
+                }
+            } catch (error) {
+                console.error('❌ 알림 권한 요청 오류:', error);
+                console.error('오류 상세:', error.message);
+                updateNotificationStatus('disabled', `오류: ${error.message}`);
+                
+                // 사용자에게 친화적인 메시지 표시
+                alert(`푸시 알림 설정 오류:\n${error.message}\n\n브라우저 설정에서 알림을 허용한 후 다시 시도해주세요.`);
+            }
+        }
+        
+        // 알림 비활성화
+        async function disableNotifications() {
+            try {
+                if (fcmToken) {
+                    await messaging.deleteToken();
+                    fcmToken = null;
+                }
+                updateNotificationStatus('disabled', '알림이 비활성화되었습니다');
+            } catch (error) {
+                console.error('❌ 알림 비활성화 오류:', error);
+            }
+        }
+        
+        // 토큰 정보 업데이트
+        async function updateTokenInfo() {
+            try {
+                const response = await fetch('/fcm/tokens');
+                const result = await response.json();
+                
+                const tokenInfoDiv = document.getElementById('token-info');
+                
+                if (result.success) {
+                    const data = result.data;
+                    tokenInfoDiv.innerHTML = `🔑 등록된 토큰: ${data.total_tokens}개 | 로드시간: ${new Date().toLocaleTimeString()}`;
+                    
+                    if (data.total_tokens > 0) {
+                        tokenInfoDiv.style.backgroundColor = '#e8f5e9';
+                        tokenInfoDiv.style.color = '#2e7d32';
+                    } else {
+                        tokenInfoDiv.style.backgroundColor = '#ffebee';
+                        tokenInfoDiv.style.color = '#c62828';
+                    }
+                } else {
+                    tokenInfoDiv.innerHTML = `🔑 토큰 정보 오류: ${result.error}`;
+                    tokenInfoDiv.style.backgroundColor = '#ffebee';
+                    tokenInfoDiv.style.color = '#c62828';
+                }
+            } catch (error) {
+                console.error('토큰 정보 업데이트 오류:', error);
+            }
+        }
+        
+        // FCM 테스트
+        async function testFCM() {
+            try {
+                if (notificationStatus !== 'enabled') {
+                    alert('먼저 알림 권한을 허용해주세요!');
+                    return;
+                }
+                
+                console.log('🧪 FCM 테스트 알림 발송 중...');
+                
+                const response = await fetch('/test-fcm', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('✅ FCM 테스트 성공:', result.message);
+                    alert(`푸시 알림 테스트가 발송되었습니다! 📱\n등록된 토큰: ${result.token_count}개`);
+                } else {
+                    console.error('❌ FCM 테스트 실패:', result.error);
+                    alert(`푸시 알림 테스트 실패: ${result.error}`);
+                }
+                
+                // 테스트 후 토큰 정보 업데이트
+                updateTokenInfo();
+                
+            } catch (error) {
+                console.error('❌ FCM 테스트 요청 오류:', error);
+                alert(`요청 오류: ${error.message}`);
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             // 소켓 연결 설정
             const socket = io({
@@ -941,6 +1801,17 @@ if __name__ == "__main__":
             const status = document.getElementById('status');
             const restartBtn = document.getElementById('restart-btn');
             const shutdownBtn = document.getElementById('shutdown-btn');
+            const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+            const testFcmBtn = document.getElementById('test-fcm-btn');
+            
+            // 초기 알림 상태 확인
+            if (Notification.permission === 'granted') {
+                requestNotificationPermission();
+            }
+            
+            // 토큰 정보 초기 로드 및 주기적 업데이트
+            updateTokenInfo();
+            setInterval(updateTokenInfo, 10000); // 10초마다 업데이트
             
             // 페이지 로드 시 연결 중 표시
             status.textContent = '연결 중...';
@@ -1062,10 +1933,45 @@ if __name__ == "__main__":
                         });
                 }
             });
+            
+            // 알림 권한 버튼
+            enableNotificationsBtn.addEventListener('click', () => {
+                if (notificationStatus === 'enabled') {
+                    disableNotifications();
+                } else {
+                    requestNotificationPermission();
+                }
+            });
+            
+            // FCM 테스트 버튼
+            testFcmBtn.addEventListener('click', testFCM);
         });
     </script>
 </body>
 </html>""")
+        
+        # Signal handler 설정 (Ctrl+C 처리)
+        signal.signal(signal.SIGINT, signal_handler)
+        
+        # 인증 설정 로드
+        load_auth_config()
+        
+        # DuckDNS 자동 업데이트 시작
+        duckdns_updater = DuckDNSUpdater()
+        duckdns_updater.start_auto_update()
+        
+        # Twilio SMS 시스템 시작
+        twilio_sms = TwilioSMS()
+        
+        # Firebase FCM 시스템 시작
+        firebase_fcm = FirebaseFCM()
+        
+        # 프로그램 시작 시 토큰 관리
+        firebase_fcm.startup_token_management()
+        
+        # Cloudflare Tunnel 시작
+        cloudflare_tunnel = CloudflareTunnel()
+        cloudflare_tunnel.start_tunnel()
         
         # 스마트 홈캠 인스턴스 생성 및 시작
         print("YOLOv5 스마트홈 카메라 시스템 시작 중...")
@@ -1074,11 +1980,33 @@ if __name__ == "__main__":
             print("카메라 시스템 시작 실패. 프로그램 종료.")
             sys.exit(1)
         
-        print("=" * 50)
-        print("YOLOv5 스마트홈 카메라 시스템이 시작되었습니다")
-        print("웹 인터페이스: http://localhost:5000")
-        print("종료하려면 Ctrl+C를 누르세요")
-        print("=" * 50)
+        print("=" * 60)
+        print("🏠 YOLOv5 스마트홈 카메라 시스템이 시작되었습니다! 🎥")
+        print("=" * 60)
+        print()
+        print("📱 접속 방법:")
+        print(f"   로컬 접속: http://localhost:5000")
+        
+        # DuckDNS 정보 표시
+        if duckdns_updater.enabled and duckdns_updater.current_ip:
+            print(f"   DuckDNS 접속: http://{duckdns_updater.domain}.duckdns.org:5000")
+        
+        # Cloudflare Tunnel 정보 표시
+        if cloudflare_tunnel and cloudflare_tunnel.tunnel_url:
+            print(f"   🌐 Cloudflare Tunnel: {cloudflare_tunnel.tunnel_url}")
+            print("      (✅ 어디서든 접속 가능)")
+        elif cloudflare_tunnel and cloudflare_tunnel.enabled:
+            print("   🌐 Cloudflare Tunnel: 시작 중...")
+        else:
+            print("   🌐 Cloudflare Tunnel: 비활성화")
+        
+        print()
+        print("🔐 로그인 정보:")
+        print(f"   사용자명: {USERNAME}")
+        print(f"   비밀번호: {PASSWORD}")
+        print()
+        print("⚠️  종료하려면 Ctrl+C를 누르세요")
+        print("=" * 60)
         
         # Flask 앱 직접 실행
         socketio.run(app, host='0.0.0.0', port=5000, debug=False)

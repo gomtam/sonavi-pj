@@ -4,9 +4,58 @@ backups/
 # 특정 폴더 내 모든 .pt 파일 무시
 object_detection_yolov5/*.pt
 
-# 실제 설정 파일 무시
+# 실제 설정 파일 무시 (개인 정보 포함)
 config.json
+
+# 보안 코드 무시
+보안 코드.txt
+
+# Firebase 서비스 계정 키 파일 무시 (매우 중요!)
+sonavi-home-cctv-bf6e3-firebase-adminsdk-fbsvc-*.json
+*firebase-adminsdk*.json
+*-firebase-adminsdk-*.json
+
+# 개인 정보 및 설정 파일들
+*.env
+*.key
+*.pem
+*.p12
+.env*
+auth_config.json
 
 # 스냅샷 및 녹화 파일 무시
 snapshots/
 recordings/
+
+# 대화 기록 및 로그 파일들
+스마트홈캠_대화내용.txt
+*.log
+logs/
+
+# Python 관련
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+
+# IDE 관련
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 운영체제 관련
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 임시 파일들
+*.tmp
+*.temp
+temp/

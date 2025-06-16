@@ -4,7 +4,7 @@ import datetime
 import time
 
 def create_backup():
-    """프로그램 파일을 백업합니다."""
+    """SoNaVi 스마트홈 카메라 프로그램 파일을 백업합니다 (Firebase FCM 포함)."""
     # 현재 디렉토리 경로
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -22,11 +22,32 @@ def create_backup():
     
     # 백업할 파일 목록
     files_to_backup = [
+        # 기본 설정 파일들
         'requirements.txt',
+        'config.json',
+        'config.example.json',
+        
+        # 메인 프로그램 파일들
         'smart_home_cam_yolov5.py',
+        'camera_fix.py',
+        'check_cameras.py',
+        
+        # Firebase 관련 파일들
+        'firebase_fcm.py',
+        'firebase_config.py',
+        'sonavi-home-cctv-bf6e3-firebase-adminsdk-fbsvc-b5de10f65b.json',
+        
+        # 웹 템플릿 파일들
         'templates/index.html',
         'templates/goodbye.html',
-        'config.json'
+        
+        # 정적 파일들
+        'static/firebase-messaging-sw.js',
+        'static/favicon.ico',
+        
+        # 기타 중요 파일들
+        '.gitignore',
+        'README.md'
     ]
     
     try:
@@ -34,6 +55,9 @@ def create_backup():
         os.makedirs(backup_folder)
         
         # 파일 복사
+        successful_backups = []
+        missing_files = []
+        
         for file in files_to_backup:
             source_path = os.path.join(current_dir, file)
             if os.path.exists(source_path):
@@ -44,10 +68,17 @@ def create_backup():
                 
                 dest_path = os.path.join(backup_folder, file)
                 shutil.copy2(source_path, dest_path)
-                print(f"백업 완료: {file}")
+                successful_backups.append(file)
+                print(f"✅ 백업 완료: {file}")
+            else:
+                missing_files.append(file)
+                print(f"⚠️  파일 없음: {file}")
         
-        print(f"\n백업이 성공적으로 완료되었습니다.")
-        print(f"백업 위치: {backup_folder}")
+        print(f"\n🎉 백업이 성공적으로 완료되었습니다!")
+        print(f"📁 백업 위치: {backup_folder}")
+        print(f"✅ 백업된 파일: {len(successful_backups)}개")
+        if missing_files:
+            print(f"⚠️  누락된 파일: {len(missing_files)}개")
         
         # 백업 파일 목록 표시
         print("\n백업된 파일 목록:")
@@ -86,9 +117,9 @@ def list_backups():
         print(f"{i}. {backup} ({time_str})")
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("프로그램 백업 도구")
-    print("=" * 50)
+    print("=" * 60)
+    print("🏠 SoNaVi 스마트홈 카메라 백업 도구 (Firebase FCM 포함)")
+    print("=" * 60)
     
     while True:
         print("\n1. 새 백업 생성")

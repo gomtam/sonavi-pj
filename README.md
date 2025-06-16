@@ -8,7 +8,7 @@
 - 실시간 객체 감지 (YOLOv5n 모델 사용)
 - 웹 인터페이스를 통한 카메라 스트리밍
 - 감지된 객체에 대한 실시간 알림
-- 음성 알림 시스템 (TTS)
+- 자동 DuckDNS 업데이트 (외부 접속)
 - 웹소켓을 통한 실시간 데이터 전송
 - 외부 네트워크에서 원격 접속 지원
 
@@ -42,7 +42,7 @@ python smart_home_cam_yolov5.py
 - `notification_cooldown`: 알림 간격 (초)
 - `confidence_threshold`: 객체 감지 신뢰도 임계값 (0.0 ~ 1.0)
 - `special_objects`: 특별 감시 대상 객체 목록
-- `tts_settings`: 음성 알림 설정
+- `duckdns_settings`: DuckDNS 자동 업데이트 설정
 - `streaming_settings`: 스트리밍 서버 설정
 - `auth_settings`: 인증 설정 (사용자 이름과 비밀번호)
 
@@ -74,29 +74,51 @@ python smart_home_cam_yolov5.py
      - 외부 포트: 5000
      - 프로토콜: TCP 또는 TCP/UDP
 
-### DDNS 설정 (동적 IP 주소 해결)
+### DuckDNS 자동 설정 (동적 IP 주소 해결)
 
-대부분의 가정용 인터넷은 IP 주소가 주기적으로 변경됩니다. DDNS 서비스를 사용하여 이 문제를 해결할 수 있습니다:
+본 프로젝트는 DuckDNS 자동 업데이트 기능을 내장하고 있어 별도의 클라이언트 설치 없이 자동으로 외부 접속이 가능합니다:
 
-1. **DDNS 서비스 가입**
-   - [No-IP](https://www.noip.com/), [DuckDNS](https://www.duckdns.org/), 또는 [Dynu](https://www.dynu.com/) 같은 서비스 이용
-   - 계정 생성 및 고유한 도메인 이름 등록 (예: yourhome.ddns.net)
+1. **DuckDNS 계정 생성**
+   - [DuckDNS 웹사이트](https://www.duckdns.org/) 접속
+   - GitHub, Google, Reddit 등으로 로그인
+   - 원하는 도메인 이름 등록 (예: yourhome.duckdns.org)
+   - 토큰 복사
 
-2. **DDNS 클라이언트 설정**
-   - No-IP 제공 클라이언트 설치 (또는 공유기가 DDNS를 지원하는 경우 관리 페이지에서 설정)
-   - 계정 정보 입력 및 설정 완료
+2. **config.json 설정**
+   ```json
+   {
+     "duckdns_settings": {
+       "enabled": true,
+       "domain": "yourhome",
+       "token": "your-duckdns-token",
+       "update_interval": 300
+     }
+   }
+   ```
 
-3. **외부에서 접속**
+3. **자동 업데이트**
+   - 프로그램 실행 시 자동으로 현재 IP를 DuckDNS에 등록
+   - 5분마다 자동으로 IP 주소 확인 및 업데이트
+   - **수동 갱신 불필요** - 영구적으로 자동 관리
+
+4. **외부에서 접속**
    - 모바일 데이터나 다른 Wi-Fi 네트워크에서 웹 브라우저 열기
-   - 등록한 DDNS 주소와 포트 번호로 접속 (예: `http://yourhome.ddns.net:5000`)
+   - DuckDNS 도메인으로 접속 (예: `http://yourhome.duckdns.org:5000`)
    - 인증 창이 나타나면 설정한 사용자 이름과 비밀번호 입력
 
 ### 예시 설정
 
 본 프로젝트에서는 다음과 같은 설정을 통해 외부 접속을 구현했습니다:
 - 포트 포워딩: 내부 IP의 5000번 포트를 외부 5000번 포트로 연결
-- DDNS 서비스: No-IP 사용 (sonavi.ddns.net 도메인 설정)
-- 접속 주소: sonavi.ddns.net:5000
+- DuckDNS 자동 업데이트: 프로그램 내장 기능으로 자동 관리
+- 접속 주소: yourhome.duckdns.org:5000
+
+### DuckDNS 장점
+
+- **완전 무료** 서비스
+- **수동 갱신 불필요** (자동 업데이트 사용 시)
+- **광고 없음**
+- **제한 없음**
 
 ### 보안 주의사항
 
